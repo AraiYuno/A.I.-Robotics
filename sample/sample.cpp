@@ -9,7 +9,7 @@ using namespace std;
 using namespace cv;
 using namespace cv::line_descriptor;
 
-Mat bgr_image;
+Mat bgr_image, original;
 
 int ball_h_Low = 0; int ball_h_High = 18; int ball_s_Low = 101; int ball_s_High = 255;
 int ball_v_Low = 160; int ball_v_High = 255;
@@ -27,8 +27,9 @@ void updateCanny_Low(int, void* ){}
 void updateCanny_High(int, void* ){}
 
 Point3i trackBall(Mat &img);
-void extractField(Mat &img);
-void mouseHandler(int event, int x, int y, int flags, void* param);
+void extractField(Mat &img, Mat &field);
+void fieldHandler(int event, int x, int y, int flags, void* param);
+void ballHandler(int event, int x, int y, int flags, void* param);
 void drawField(Mat &img);
 
 /* Helper functions */
@@ -57,22 +58,24 @@ int main( int argc, char** argv )
 		resize(bgr_image, bgr_image, Size(300,300), 0,0,1);
 		
 		medianBlur(bgr_image, bgr_blur, 5);
-
 		cvtColor(bgr_blur, bgr_image, cv::COLOR_BGR2HSV);
-		imshow("Control", bgr_image);
-		setMouseCallback("Control",mouseHandler, 0 );
+		
+		imshow("Field Finder", bgr_image);
+		setMouseCallback("Field Finder",fieldHandler, 0 );
+		imshow("Ball Finder", bgr_image);
+		setMouseCallback("Ball Finder", ballHandler, 0 );
 	
 		Point3i ball = trackBall(bgr_image);
 
 		if(ball.x>0)
 			circle(bgr_image, Point(ball.x, ball.y), ball.z, Scalar(255,0,0), 2);
 
-		Mat field = bgr_image.clone();
+		Mat field;
 		
-		extractField(field);
-		//drawField(field);
+		extractField(bgr_image, field);
+		drawField(field);
 
-		imshow("field",field);
+		imshow("Field Control",field);
 		
 		waitKey(30);
 	}
@@ -80,32 +83,40 @@ return 0;
 }
 
 
-void mouseHandler(int event, int x, int y, int flags, void* param) {
+void fieldHandler(int event, int x, int y, int flags, void* param) {
 	if(event == CV_EVENT_LBUTTONDOWN){
 		Vec3b intensity = bgr_image.at<Vec3b>(y, x);
 		uchar blue = intensity.val[0];
 		uchar green = intensity.val[1];
 		uchar red = intensity.val[2];
-		cout << intensity << endl;
-		field_h_Low = (int)intensity[0] -30;
-		field_h_High = (int)intensity[0] +30;
+
+		field_h_Low = (int)intensity[0] -20;
+		field_h_High = (int)intensity[0] +20;
 
 		field_s_Low = (int)intensity[1] -30;
 		field_s_High = (int)intensity[1] +30;
 
 		field_v_Low = (int)intensity[2] -30;
 		field_v_High = (int)intensity[2] +30;
-
-		Mat hsv_threshold;
-
-		inRange(bgr_image, cv::Scalar(field_h_Low, field_s_Low, field_v_Low), cv::Scalar(field_h_High, field_s_High, field_v_High), hsv_threshold);
-		imshow("Field On Click", hsv_threshold);
-		drawField(hsv_threshold);
 	}
 }
 
+void ballHandler(int event, int x, int y, int flags, void* param) {
+	if(event == CV_EVENT_LBUTTONDOWN){
+		Vec3b intensity = bgr_image.at<Vec3b>(y, x);
 
-void extractField(Mat &img)
+		ball_h_Low = (int)intensity[0] -20;
+		ball_h_High = (int)intensity[0] +20;
+
+		ball_s_Low = (int)intensity[1] -30;
+		ball_s_High = (int)intensity[1] +30;
+
+		ball_v_Low = (int)intensity[2] -30;
+		ball_v_High = (int)intensity[2] +30;
+	}
+}
+
+void extractField(Mat &img, Mat &field)
 {
 	/// GUI with trackbar
 	namedWindow( "Field Control", CV_WINDOW_AUTOSIZE );
@@ -120,27 +131,17 @@ void extractField(Mat &img)
 
 	inRange(img, cv::Scalar(field_h_Low, field_s_Low, field_v_Low), cv::Scalar(field_h_High, field_s_High, field_v_High), hsv_threshold);
 	
-	Mat element = getStructuringElement(MORPH_RECT,Size(20,20), Point(1,1));
+	Mat element = getStructuringElement(MORPH_RECT,Size(30,30), Point(1,1));
 	morphologyEx(hsv_threshold, hsv_threshold, MORPH_CLOSE , element);
-
-	int top, bottom, left, right;
-	top = (int) (0.02*hsv_threshold.rows); bottom = (int) (0.02*hsv_threshold.rows);
-  	left = (int) (0.02*hsv_threshold.cols); right = (int) (0.02*hsv_threshold.cols);
-
-	copyMakeBorder( hsv_threshold, hsv_threshold, top, bottom, left, right, BORDER_CONSTANT, Scalar(0,0,0) );
-	
 
 	Mat canny;
 
-	Canny(hsv_threshold,canny, 100, 255, 3);
+	Mat result = bgr_image.clone();
+	Mat out;
+	result.copyTo(out, hsv_threshold);
 
-	vector<vector<Point> > contours;
-	
-	findContours(canny, contours, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
-	
-	imshow("Field Control", hsv_threshold);
+	field = out;
 }
-
 
 Point3i trackBall(Mat &img)
 {
@@ -160,7 +161,7 @@ Point3i trackBall(Mat &img)
 //	erode(hsv_threshold, hsv_threshold, Mat(), Point(-1, -1), 4);
 	
 	Mat element = getStructuringElement(MORPH_ELLIPSE,Size(30,30));
-	morphologyEx(hsv_threshold, hsv_threshold, 3 , element);
+	morphologyEx(hsv_threshold, hsv_threshold, MORPH_CLOSE , element);
 	imshow("Ball Control",hsv_threshold);
 	Mat canny;
 
@@ -198,7 +199,6 @@ Point3i trackBall(Mat &img)
 	vector<float> radius(balls.size());
 	for (int i = 0; i< balls.size(); i++)
 	{
-		cout << "contours " << balls[i].size() << endl;
 		approxPolyDP(Mat(balls[i]), cir[i], 3, true);
 		minEnclosingCircle(cir[i], center[i], radius[i]);	
 		if ((cir[i]).size() > 4 && radius[i] > maxRadius)
@@ -219,7 +219,6 @@ Point3i trackBall(Mat &img)
 
 	return result;	
 }
-
 
 void drawField(Mat &img){
 	//Mat mat_frame, canny, gray,cameraFeed;
@@ -264,7 +263,7 @@ void drawField(Mat &img){
 		/* Categorise each keyline into different longer segments of lines to better clasify them */
 		bool isCategorised = false;
 		for( int j = 0; j < categorisedLines.size(); j++ ){
-			if( calcDistance(kl, categorisedLines[j][0]) < 30 && (calcAngle(kl) < calcAngle(categorisedLines[j][0]) + 30 && calcAngle(kl) > calcAngle(categorisedLines[j][0] - 30)){
+			if( calcDistance(&kl, &categorisedLines[j][0]) < 30.0f && (calcAngle(&kl) < calcAngle(&categorisedLines[j][0]) + 30.0f && calcAngle(&kl) > calcAngle(&categorisedLines[j][0]) - 30.0f)){
 				cout << "FUCKING HERE " << endl;
 			}  
 		}
