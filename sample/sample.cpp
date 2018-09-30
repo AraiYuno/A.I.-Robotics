@@ -249,6 +249,10 @@ void drawField(Mat &img){
 	inRange(img, cv::Scalar(ball_h_Low-30, ball_s_Low, ball_v_Low), cv::Scalar(ball_h_High, ball_s_High, ball_v_High), hsv_threshold);
 
 	mask = Mat::ones( img.size(), CV_8UC1 );
+
+	
+
+
 	/* create a pointer to an LSDDetector object */
 	Ptr<LSDDetector> lsd = LSDDetector::createLSDDetector();
 	/* compute lines */
@@ -306,7 +310,7 @@ void drawField(Mat &img){
 				keylines.erase(keylines.begin()+i); // if kl.octave isn't 0, we don't need to care of this kl anymore.
 			}
 		}
-		if( mainLine.lineLength > 10.0f )
+		if( mainLine.lineLength > 25.0f )
 			mergedLines.push_back(mainLine);
 		cout << "KEYLINE: " + std::to_string(keylines.size()) << endl;
 		cout << "MergedLines: " + std::to_string(mergedLines.size()) + "\n" << endl;
@@ -375,13 +379,15 @@ void mergeLines(KeyLine &mainLine, KeyLine &kl){
 		Point newStartPoint, newEndPoint;
 		if( yDistance < xDistance ){
 			// then, this line is likely to be a horizontal line.
-			newStartPoint = Point( (smallerMainLineX < smallerKlX) ? smallerMainLineX : smallerKlX, (smallerMainLineY + smallerKlY)/2);
-			newEndPoint = Point( (largerMainLineX >= largerKlX) ? largerMainLineX : largerKlX, (largerMainLineY + largerKlY)/2 ); 
+			newStartPoint = Point( mainLine.startPointX, mainLine.startPointY);
+			newEndPoint = Point( kl.endPointX, kl.endPointY); 
 		}
 		else {
 			// This line is likely to be a vertical line
-			newStartPoint = Point( (smallerMainLineX + smallerKlX)/2, (smallerMainLineY < smallerKlY) ? smallerMainLineY : smallerKlY );
-			newEndPoint = Point( (largerMainLineX + largerKlX)/2, (largerMainLineY >= largerKlY) ? largerMainLineY : largerKlY );
+			// newStartPoint = Point( (smallerMainLineX + smallerKlX)/2, (smallerMainLineY < smallerKlY) ? smallerMainLineY : smallerKlY );
+			// newEndPoint = Point( (largerMainLineX + largerKlX)/2, (largerMainLineY >= largerKlY) ? largerMainLineY : largerKlY );
+			newStartPoint = Point( mainLine.startPointX, mainLine.startPointY);
+			newEndPoint = Point( kl.endPointX, kl.endPointY); 
 		}
 
 		mainLine.startPointX = newStartPoint.x;
@@ -397,8 +403,22 @@ float calcDistance(KeyLine *kl1, KeyLine *kl2){
 	Point kl2StartPt = Point( kl2->startPointX, kl2->startPointY );
 	Point kl2EndPt = Point( kl2->endPointX, kl2->endPointY );
 	//cout << std::to_string(kl1EndPt.x) + ", " + std::to_string(kl1EndPt.y) +" : " + std::to_string(kl2StartPt.x) + ", " + std::to_string(kl2StartPt.y) << endl;
-	float startToStartEnd = (norm(kl1StartPt - kl2StartPt) <= norm(kl1StartPt - kl2EndPt) ? norm(kl1StartPt -kl2StartPt) : norm(kl1StartPt - kl2EndPt));
-	float endToStartEnd = (norm(kl1EndPt - kl2StartPt) <= norm(kl1EndPt - kl2EndPt) ? norm(kl1EndPt - kl2StartPt) : norm(kl1EndPt - kl2EndPt));
+	float startToStartXDiff = kl1StartPt.x - kl2StartPt.x;
+	float startToEndXDiff = kl1StartPt.x - kl2EndPt.x;
+	float startToStartYDiff = kl1StartPt.y - kl2StartPt.y;
+	float startToEndYDiff = kl1StartPt.y - kl2EndPt.y;
+	float endToStartXDiff = kl1EndPt.x - kl2StartPt.x;
+	float endToEndXDiff = kl1EndPt.x - kl2EndPt.x;
+	float endToStartYDiff = kl1EndPt.y - kl2StartPt.y;
+	float endToEndYDiff = kl1EndPt.y - kl2EndPt.y;
+	
+	float startToStart = sqrt(startToStartXDiff*startToStartXDiff + startToStartYDiff*startToStartYDiff);
+	float startToEnd = sqrt(startToEndXDiff*startToEndXDiff + startToEndYDiff*startToEndYDiff);
+	float endToStart = sqrt(endToStartXDiff*endToStartXDiff + endToStartYDiff*endToStartYDiff);
+	float endToEnd = sqrt(endToEndXDiff*endToEndXDiff + endToEndYDiff*endToEndYDiff);
+
+	float startToStartEnd = (startToStart <= startToEnd) ? startToStart : startToEnd;
+	float endToStartEnd = (endToStart <= endToEnd ) ? endToStart : endToEnd;
 	return ( (startToStartEnd <= endToStartEnd ) ? startToStartEnd : endToStartEnd );
 }
 
@@ -429,8 +449,3 @@ void sortKeyLines(vector<KeyLine> &keyLines){
 		}
 	}
 }
-
-
-
-
-
