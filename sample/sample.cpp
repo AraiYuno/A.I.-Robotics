@@ -39,6 +39,7 @@ float calcAngle(KeyLine &kl);
 bool areSameLines(KeyLine &kl1, KeyLine &kl2);
 void sortKeyLines(vector<KeyLine> &keyLines);
 void mergeLines(KeyLine &mainLine, KeyLine &kl);
+void cleanUpLines( vector<KeyLine> &keyLines, vector<KeyLine> &mergedLines);
 
 /** @function main */
 int main( int argc, char** argv )
@@ -225,33 +226,8 @@ Point3i trackBall(Mat &img)
 }
 
 void drawField(Mat &img){
-	//Mat mat_frame, canny, gray,cameraFeed;
-	// VideoCapture cap(1); // start the camera id:1
-
-    // if(!cap.isOpened())  // check if the camera starts 
-    //     return;
-
-	/// GUI with trackbar
-	namedWindow( "LSD", CV_WINDOW_AUTOSIZE );
-	// while(1){
-	// 	cap.read(cameraFeed);
-	Mat bgr_image, bgr_blur, hsv_image, mask;
-// 	//bgr_image = imread("ball1.jpg", CV_LOAD_IMAGE_COLOR);
-// 	// create the GUI window (web cam)
 	resize(img, img, Size(700,700),0,0,CV_INTER_LINEAR);
-			
-	// create a HSV version of image from bgr image
-	// medianBlur(img, bgr_blur, 5);
-	// cvtColor(bgr_blur, hsv_image, cv::COLOR_BGR2HSV);
-
-	Mat hsv_threshold;
-	//inRange(hsv_image, cv::Scalar(0, 0, 212), cv::Scalar(131, 255, 255), hsv_threshold);
-	inRange(img, cv::Scalar(ball_h_Low-30, ball_s_Low, ball_v_Low), cv::Scalar(ball_h_High, ball_s_High, ball_v_High), hsv_threshold);
-
-	mask = Mat::ones( img.size(), CV_8UC1 );
-
-	
-
+	Mat mask = Mat::ones( img.size(), CV_8UC1 );
 
 	/* create a pointer to an LSDDetector object */
 	Ptr<LSDDetector> lsd = LSDDetector::createLSDDetector();
@@ -264,61 +240,45 @@ void drawField(Mat &img){
 	cv::Mat output = img.clone();
 	if( output.channels() == 1 )
 		cvtColor( output, output, COLOR_GRAY2BGR );
-	
-// for ( size_t i = 0; i < keylines.size(); i++ )
-// 	{
-// 		KeyLine kl = keylines[i];
-// 		/* Categorise each keyline into different longer segments of lines to better clasify them */
-// 		if( kl.octave == 0)
-// 		{
-// 			/* get a random color */
-// 			int R = ( rand() % (int) ( 255 + 1 ) );
-// 			int G = ( rand() % (int) ( 255 + 1 ) );
-// 			int B = ( rand() % (int) ( 255 + 1 ) );
-		
-// 			/* get extremes of line */
-// 			Point pt1 = Point( kl.startPointX, kl.startPointY );
-// 			Point pt2 = Point( kl.endPointX, kl.endPointY );
-
-// 			/* draw line */
-
-// 				line( output, pt1, pt2, Scalar( R, G, B ), 5 );
-// 		}
-// 	}
 
 	vector<KeyLine> mergedLines;
+	cleanUpLines( keylines, mergedLines);
+	keylines = mergedLines;
+	drawLines(output, mergedLines);
+
+	imshow("LSD", output);
+}
+
+
+void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 	do {
 		bool mainLineIsSelected = false;
 		KeyLine mainLine;
-		int size = keylines.size();
+		int size = lines.size();
 		for( int i = 0; i < size; i++ ){
-			KeyLine kl = keylines[i];
-			if( kl.octave == 0 ){
+			KeyLine line = lines[i];
+			if( true ){
 				if( !mainLineIsSelected ){
-					mainLine = kl;
+					mainLine = line;
 					mainLineIsSelected = true;
-					keylines.erase(keylines.begin() + i);
+					lines.erase(lines.begin() + i);
 				} else {
-					if( areSameLines(mainLine, kl) ){ // we compare the mainLine and kl to see if we need to merge.
-						mergeLines(mainLine, kl);
-						keylines.erase(keylines.begin() + i);
-						//cout << std::to_string(i) + ": " + std::to_string(keylines.size()) << endl;
+					if( areSameLines(mainLine, line) ){ // we compare the mainLine and kl to see if we need to merge.
+						mergeLines(mainLine, line);
+						lines.erase(lines.begin() + i);
 					}
 				}
 			} 
 			else {
-				keylines.erase(keylines.begin()+i); // if kl.octave isn't 0, we don't need to care of this kl anymore.
+				lines.erase(lines.begin()+i); // if kl.octave isn't 0, we don't need to care of this kl anymore.
 			}
 		}
-		if( mainLine.lineLength > 25.0f )
+
+		if( mainLine.lineLength > 10.0f )
 			mergedLines.push_back(mainLine);
-		cout << "KEYLINE: " + std::to_string(keylines.size()) << endl;
+		cout << "KEYLINE: " + std::to_string(lines.size()) << endl;
 		cout << "MergedLines: " + std::to_string(mergedLines.size()) + "\n" << endl;
-	} while(keylines.size() > 1);
-
-	drawLines(output, mergedLines);
-
-	imshow("LSD", output);
+	} while(lines.size() > 1);
 }
 
 
@@ -349,12 +309,8 @@ void drawLines( Mat &output, vector<KeyLine> &keyLines){
 them to be the same lines to be merged. */
 bool areSameLines(KeyLine &kl1, KeyLine &kl2){
 	float distance = calcDistance(&kl1, &kl2);
-
 	float angleDifference = calcAngle(kl1) - calcAngle(kl2);
-	//cout << "Distance: " + std::to_string(distance) << endl;
-	//cout << "AngleDif: " + std::to_string(angleDifference) + "angle1: " + std::to_string(kl1.angle) + "angle2: " + std::to_string(kl2.angle) + "\n" << endl;
 	return (distance < 25  && std::abs(angleDifference) < 30) ? true : false;
-	//return true;
 }
 
 
