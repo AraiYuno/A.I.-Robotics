@@ -31,11 +31,14 @@ void extractField(Mat &img, Mat &field);
 void fieldHandler(int event, int x, int y, int flags, void* param);
 void ballHandler(int event, int x, int y, int flags, void* param);
 void drawField(Mat &img);
+void drawLines( Mat &output, vector<KeyLine> &keyLines);
 
 /* Helper functions */
-float calcAngle(KeyLine *kl);
 float calcDistance(KeyLine *kl1, KeyLine *kl2);
-void sortKeyLines(vector<KeyLine> *keyLines)
+float calcAngle(KeyLine &kl);
+bool areSameLines(KeyLine &kl1, KeyLine &kl2);
+void sortKeyLines(vector<KeyLine> &keyLines);
+void mergeLines(KeyLine &mainLine, KeyLine &kl);
 
 /** @function main */
 int main( int argc, char** argv )
@@ -44,18 +47,18 @@ int main( int argc, char** argv )
 	
 
 	int top, left, right, bottom;
-	VideoCapture cap(1); 
+	VideoCapture cap(0); 
 
     if(!cap.isOpened())  // check if the camera starts 
-        return -1;
+         return -1;
 	
 	while (1) {
 		cap.read(cameraFeed);
 
 		Mat bgr_blur, hsv_image;
-		//bgr_image = imread("field1.jpg", CV_LOAD_IMAGE_COLOR);
+		bgr_image = imread("field1.jpg", CV_LOAD_IMAGE_COLOR);
 
-		bgr_image = cameraFeed.clone();
+		//bgr_image = cameraFeed.clone();
 		resize(bgr_image, bgr_image, Size(300,300), 0,0,1);
 		
 		medianBlur(bgr_image, bgr_blur, 5);
@@ -258,84 +261,129 @@ void drawField(Mat &img){
 	if( output.channels() == 1 )
 		cvtColor( output, output, COLOR_GRAY2BGR );
 	
+// for ( size_t i = 0; i < keylines.size(); i++ )
+// 	{
+// 		KeyLine kl = keylines[i];
+// 		/* Categorise each keyline into different longer segments of lines to better clasify them */
+// 		if( kl.octave == 0)
+// 		{
+// 			/* get a random color */
+// 			int R = ( rand() % (int) ( 255 + 1 ) );
+// 			int G = ( rand() % (int) ( 255 + 1 ) );
+// 			int B = ( rand() % (int) ( 255 + 1 ) );
+		
+// 			/* get extremes of line */
+// 			Point pt1 = Point( kl.startPointX, kl.startPointY );
+// 			Point pt2 = Point( kl.endPointX, kl.endPointY );
+
+// 			/* draw line */
+
+// 				line( output, pt1, pt2, Scalar( R, G, B ), 5 );
+// 		}
+// 	}
+
 	vector<KeyLine> mergedLines;
 	do {
 		bool mainLineIsSelected = false;
 		KeyLine mainLine;
-		for( int i = 1; i < keylines.size(); i++ ){
+		int size = keylines.size();
+		for( int i = 0; i < size; i++ ){
 			KeyLine kl = keylines[i];
-			if( kl.octave == 0 && kl.lineLength > 5 ){
+			if( kl.octave == 0 ){
 				if( !mainLineIsSelected ){
 					mainLine = kl;
 					mainLineIsSelected = true;
+					keylines.erase(keylines.begin() + i);
 				} else {
 					if( areSameLines(mainLine, kl) ){ // we compare the mainLine and kl to see if we need to merge.
-						mergeLines( mainLine, kl);
+						mergeLines(mainLine, kl);
 						keylines.erase(keylines.begin() + i);
-					} 
+						//cout << std::to_string(i) + ": " + std::to_string(keylines.size()) << endl;
+					}
 				}
 			} 
 			else {
 				keylines.erase(keylines.begin()+i); // if kl.octave isn't 0, we don't need to care of this kl anymore.
 			}
 		}
-		mergedLines.push_back(mainLine);
-	} while(keylines.size() > 0)
+		if( mainLine.lineLength > 10.0f )
+			mergedLines.push_back(mainLine);
+		cout << "KEYLINE: " + std::to_string(keylines.size()) << endl;
+		cout << "MergedLines: " + std::to_string(mergedLines.size()) + "\n" << endl;
+	} while(keylines.size() > 1);
 
-	cout << mergedLines.size() << endl;
-	// for ( size_t i = 0; i < keylines.size(); i++ )
-	// {
-	// 	KeyLine kl = keylines[i];
-	// 	/* Categorise each keyline into different longer segments of lines to better clasify them */
-	// 	if( kl.octave == 0)
-	// 	{
-	// 		/* get a random color */
-	// 		int R = ( rand() % (int) ( 255 + 1 ) );
-	// 		int G = ( rand() % (int) ( 255 + 1 ) );
-	// 		int B = ( rand() % (int) ( 255 + 1 ) );
-		
-	// 		/* get extremes of line */
-	// 		Point pt1 = Point( kl.startPointX, kl.startPointY );
-	// 		Point pt2 = Point( kl.endPointX, kl.endPointY );
+	drawLines(output, mergedLines);
 
-	// 		/* draw line */
-	// 		// if(  norm(pt1 - pt2) > 10 )
-	// 		// 	line( output, pt1, pt2, Scalar( R, G, B ), 5 );
-	// 	}
-	// }
 	imshow("LSD", output);
+}
+
+
+void drawLines( Mat &output, vector<KeyLine> &keyLines){
+	for( unsigned int i = 0; i < keyLines.size(); i++ ) {
+		KeyLine kl = keyLines[i];
+		
+		if( kl.octave == 0)
+		{
+			/* get a random color */
+			int R = ( rand() % (int) ( 255 + 1 ) );
+			int G = ( rand() % (int) ( 255 + 1 ) );
+			int B = ( rand() % (int) ( 255 + 1 ) );
+		
+			/* get extremes of line */
+			Point pt1 = Point( kl.startPointX, kl.startPointY );
+			Point pt2 = Point( kl.endPointX, kl.endPointY );
+
+			/* draw line */
+
+			line( output, pt1, pt2, Scalar( 255, 0, 0 ), 5 );
+		}
+	}
 }
 
 
 /* If two lines are near to one another, and have similar angles, we consider
 them to be the same lines to be merged. */
-bool areSameLines(KeyLine *kl1, KeyLine *kl2){
-	float distance = (kl1, kl2);
-	float angleDifference = kl1.angle - kl2.angle;
-	return (distance < 20 && std::abs(angleDifference) < 15) ? true : false;
+bool areSameLines(KeyLine &kl1, KeyLine &kl2){
+	float distance = calcDistance(&kl1, &kl2);
+
+	float angleDifference = calcAngle(kl1) - calcAngle(kl2);
+	//cout << "Distance: " + std::to_string(distance) << endl;
+	//cout << "AngleDif: " + std::to_string(angleDifference) + "angle1: " + std::to_string(kl1.angle) + "angle2: " + std::to_string(kl2.angle) + "\n" << endl;
+	return (distance < 25  && std::abs(angleDifference) < 30) ? true : false;
+	//return true;
 }
 
 
 /* This function merges kl into mainLine. The idea is that mainLine's new startPoint will be the smallest x, and y, and the 
 endpoint will be the largest x and y.  */
-void mergeLines(KeyLine *mainLine, Keyline *kl){
-		// Point mainLineMidPt = Point( (mainLine.startPointX + mainLine.endPointX)/2, (mainLine.startPointY + mainLine.endPointY)/2 );
-		// Point klMidPt = Point( (kl.startPointX + kl.endPointX)/2, (kl.startPointY + kl.endPointY)/2 );
+void mergeLines(KeyLine &mainLine, KeyLine &kl){
+		Point mainLineMidPt = Point( (mainLine.startPointX + mainLine.endPointX)/2, (mainLine.startPointY + mainLine.endPointY)/2 );
+		Point klMidPt = Point( (kl.startPointX + kl.endPointX)/2, (kl.startPointY + kl.endPointY)/2 );
 
-		// float xDistance = std::abs(mainLineMidPt.x - klMidPt.x);
-		// float yDistance = std::abs(mainLineMidPt.y - klMidPt.y);
-		
-		// then, we set
-		float smallerMainLineY = (mainLine.startPointY <= mainLine.endPointY) ? mainLine.startPointY : mainLine.endPointY;
-		float smallerKlY = (kl.startPointY <= kl.endPointY) ? kl.startPointY : kl.endPointY;
+		float xDistance = std::abs(mainLineMidPt.x - klMidPt.x);
+		float yDistance = std::abs(mainLineMidPt.y - klMidPt.y);
+
 		float smallerMainLineX = (mainLine.startPointX < mainLine.endPointX) ? mainLine.startPointX : mainLine.endPointX;
 		float smallerKlX = (kl.startPointX < kl.endPointX) ? kl.startPointX : kl.endPointX;
-		Point newStartPoint = Point( (smallerMainLineX < smallerKlX) ? smallerMainLineX : smallerKlX, (smallerMainLineY < smallerKlY) ? smallerMainLineY : smallerKLY);
+		float smallerMainLineY = (mainLine.startPointY <= mainLine.endPointY) ? mainLine.startPointY : mainLine.endPointY;
+		float smallerKlY = (kl.startPointY <= kl.endPointY) ? kl.startPointY : kl.endPointY;
 		float largerMainLineX = (mainLine.startPointX >= mainLine.endPointX) ? mainLine.startPointX : mainLine.endPointX;
 		float largerKlX = (kl.startPointX >= kl.endPointX) ? kl.startPointX : kl.endPointX;
 		float largerMainLineY = (mainLine.startPointY >= mainLine.endPointY) ? mainLine.startPointY : mainLine.endPointY;
 		float largerKlY = (kl.startPointY >= kl.endPointY) ? kl.startPointY : kl.endPointY;
-		Point newEndPoint = Point( (largerMainLineX >= largerKlX) ? largerMainLineX : largerKlX, (largerMainLineY >= largerKlY) ? largerMainLineY : largerKlY);
+		
+		Point newStartPoint, newEndPoint;
+		if( yDistance < xDistance ){
+			// then, this line is likely to be a horizontal line.
+			newStartPoint = Point( (smallerMainLineX < smallerKlX) ? smallerMainLineX : smallerKlX, (smallerMainLineY + smallerKlY)/2);
+			newEndPoint = Point( (largerMainLineX >= largerKlX) ? largerMainLineX : largerKlX, (largerMainLineY + largerKlY)/2 ); 
+		}
+		else {
+			// This line is likely to be a vertical line
+			newStartPoint = Point( (smallerMainLineX + smallerKlX)/2, (smallerMainLineY < smallerKlY) ? smallerMainLineY : smallerKlY );
+			newEndPoint = Point( (largerMainLineX + largerKlX)/2, (largerMainLineY >= largerKlY) ? largerMainLineY : largerKlY );
+		}
+
 		mainLine.startPointX = newStartPoint.x;
 		mainLine.startPointY = newStartPoint.y;
 		mainLine.endPointX = newEndPoint.x;
@@ -348,25 +396,37 @@ float calcDistance(KeyLine *kl1, KeyLine *kl2){
 	Point kl1EndPt = Point( kl1->endPointX, kl1->endPointY );
 	Point kl2StartPt = Point( kl2->startPointX, kl2->startPointY );
 	Point kl2EndPt = Point( kl2->endPointX, kl2->endPointY );
-	return norm(kl1EndPt - kl2StartPt);
+	//cout << std::to_string(kl1EndPt.x) + ", " + std::to_string(kl1EndPt.y) +" : " + std::to_string(kl2StartPt.x) + ", " + std::to_string(kl2StartPt.y) << endl;
+	float startToStartEnd = (norm(kl1StartPt - kl2StartPt) <= norm(kl1StartPt - kl2EndPt) ? norm(kl1StartPt -kl2StartPt) : norm(kl1StartPt - kl2EndPt));
+	float endToStartEnd = (norm(kl1EndPt - kl2StartPt) <= norm(kl1EndPt - kl2EndPt) ? norm(kl1EndPt - kl2StartPt) : norm(kl1EndPt - kl2EndPt));
+	return ( (startToStartEnd <= endToStartEnd ) ? startToStartEnd : endToStartEnd );
 }
 
+
+float calcAngle(KeyLine &kl){
+	float angle = atan2(kl.endPointY - kl.startPointY, kl.endPointX - kl.startPointX);
+	return angle * 180.0f / 3.141592f;
+}
 
 //=================================================================================
 // sortKeyLines(vector<KeyLine> *keyLines)
 //   this function sorts the keyLines by X coordinate, then Y if two x's are the same.
 //=================================================================================
-void sortKeyLines(vector<KeyLine> *keyLines){
-	float key;
-	for( int i = 0; i < keyLines.size(); i++ ){
-		key = (keyLines[i].startPointX < keyLines[i].endPointX) ? keyLines[i].startPointX : keyLines[i].endPointX;
-		int j = i - 1;
-		float toCompare = (keyLines[j].startPointX < keyLines[j].endPointX) ? keyLines[j].startPointX : keyLines[j].endPointX;
-		while( j >= 0 && toCompare > key ){
-			keyLines[j+1] = keyLines[j];
-			j = j - 1;
+void sortKeyLines(vector<KeyLine> &keyLines){
+	int maxIndex;
+	for( int i = 0; i < keyLines.size()-1; i++ ){
+		maxIndex = i;
+		for( int j = i + 1; j < keyLines.size(); j++ ) {
+			if( keyLines[j].startPointX > keyLines[maxIndex].startPointX){
+				maxIndex = j;
+			}
 		}
-		keyLines[j + 1] = keyLines[i];
+
+		if( maxIndex != i ){
+			KeyLine temp = keyLines[i];
+			keyLines[i] = keyLines[maxIndex];
+			keyLines[maxIndex] = temp; 
+		}
 	}
 }
 
