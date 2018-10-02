@@ -17,8 +17,8 @@ int ball_v_Low = 160; int ball_v_High = 255;
 int field_h_Low = 55; int field_h_High = 95; int field_s_Low = 149; int field_s_High = 189;
 int field_v_Low = 60; int field_v_High = 100;
 
-int line_h_Low = 76; int line_h_High = 100; int line_s_Low = 111; int line_s_High = 220;
-int line_v_Low = 29; int line_v_High = 246;
+int line_h_Low = 211; int line_h_High = 255; int line_s_Low = 211; int line_s_High = 255;
+int line_v_Low = 218; int line_v_High = 255;
 
 RNG rng(12345);
 
@@ -30,18 +30,17 @@ Point3i trackBall(Mat &img);
 void extractField(Mat &img, Mat &field);
 void fieldHandler(int event, int x, int y, int flags, void* param);
 void ballHandler(int event, int x, int y, int flags, void* param);
+void lineHandler(int event, int x, int y, int flags, void* param);
 void drawField(Mat &img);
 void drawLines( Mat &output, vector<KeyLine> &keyLines);
 
 /* Helper functions */
-void connectEndPoints(vector<KeyLine> &keyLines);
 float calcDistance(KeyLine *kl1, KeyLine *kl2);
 float calcAngle(KeyLine &kl);
 bool areSameLines(KeyLine &kl1, KeyLine &kl2);
 void sortKeyLines(vector<KeyLine> &keyLines);
 void mergeLines(KeyLine &mainLine, KeyLine &kl);
 void cleanUpLines( vector<KeyLine> &keyLines, vector<KeyLine> &mergedLines);
-int getNearByType(KeyLine *kl1, KeyLine *kl2);
 
 /** @function main */
 int main( int argc, char** argv )
@@ -60,11 +59,10 @@ int main( int argc, char** argv )
 
 		Mat bgr_blur, hsv_image;
 		bgr_image = imread("field1.jpg", CV_LOAD_IMAGE_COLOR);
-
+		
 		//bgr_image = cameraFeed.clone();
 		resize(bgr_image, bgr_image, Size(300,300), 0,0,1);
 		original = bgr_image.clone();
-
 		medianBlur(bgr_image, bgr_blur, 5);
 		cvtColor(bgr_blur, bgr_image, cv::COLOR_BGR2HSV);
 
@@ -81,14 +79,18 @@ int main( int argc, char** argv )
 		Mat field;
 		
 		extractField(bgr_image, field);
+		original = field.clone();
+		imshow("Line Finder", bgr_image);
+		setMouseCallback("Line Finder", lineHandler, 0 );
 		drawField(field);
-
 		imshow("Field Control",field);
 		
 		waitKey(30);
 	}
 return 0;
 }
+
+
 
 
 void fieldHandler(int event, int x, int y, int flags, void* param) {
@@ -121,6 +123,24 @@ void ballHandler(int event, int x, int y, int flags, void* param) {
 
 		ball_v_Low = (int)intensity[2] -30;
 		ball_v_High = (int)intensity[2] +30;
+	}
+}
+
+void lineHandler(int event, int x, int y, int flags, void* param) {
+	if(event == CV_EVENT_LBUTTONDOWN){
+		Vec3b intensity = original.at<Vec3b>(y, x);
+
+		line_h_Low = (int)intensity[0] -20;
+		line_h_High = (int)intensity[0] +20;
+
+		line_s_Low = (int)intensity[1] -30;
+		line_s_High = (int)intensity[1] +30;
+
+		line_v_Low = (int)intensity[2] -30;
+		line_v_High = (int)intensity[2] +30;
+
+		cout << intensity << endl;
+	
 	}
 }
 
@@ -228,8 +248,21 @@ Point3i trackBall(Mat &img)
 	return result;	
 }
 
-void drawField(Mat &img){
-	resize(img, img, Size(700,700),0,0,CV_INTER_LINEAR);
+void drawField(Mat &hsv_img){
+
+
+	namedWindow( "Line Control", CV_WINDOW_AUTOSIZE );
+	createTrackbar( "h (Low):", "Line Control", &line_h_Low, 255, updateCanny_Low);
+	createTrackbar( "h (High):", "Line Control", &line_h_High, 255, updateCanny_High);
+	createTrackbar( "s (Low):", "Line Control", &line_s_Low, 255, updateCanny_Low);
+	createTrackbar( "s (High):", "Line Control", &line_s_High, 255, updateCanny_High);
+	createTrackbar( "v (Low):", "Line Control", &line_v_Low, 255, updateCanny_Low);
+	createTrackbar( "v (High):", "Line Control", &line_v_High, 255, updateCanny_High);
+	Mat img;
+	inRange(hsv_img, cv::Scalar(line_h_Low, line_s_Low, line_v_Low), cv::Scalar(line_h_High, line_s_High, line_v_High), img);
+
+	imshow("Line Control", img);
+	resize(img, img, Size(300,300),0,0,CV_INTER_LINEAR);
 	Mat mask = Mat::ones( img.size(), CV_8UC1 );
 
 	/* create a pointer to an LSDDetector object */
@@ -246,7 +279,6 @@ void drawField(Mat &img){
 
 	vector<KeyLine> mergedLines;
 	cleanUpLines( keylines, mergedLines);
-	//connectEndPoints(mergedLines);
 	keylines = mergedLines;
 	drawLines(output, mergedLines);
 
@@ -289,10 +321,22 @@ void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 void drawLines( Mat &output, vector<KeyLine> &keyLines){
 	for( unsigned int i = 0; i < keyLines.size(); i++ ) {
 		KeyLine kl = keyLines[i];
-		Point pt1 = Point( kl.startPointX, kl.startPointY );
-		Point pt2 = Point( kl.endPointX, kl.endPointY );
-		/* draw line */
-		line( output, pt1, pt2, Scalar( 255, 0, 0 ), 5 );
+		
+		if( kl.octave == 0)
+		{
+			/* get a random color */
+			int R = ( rand() % (int) ( 255 + 1 ) );
+			int G = ( rand() % (int) ( 255 + 1 ) );
+			int B = ( rand() % (int) ( 255 + 1 ) );
+		
+			/* get extremes of line */
+			Point pt1 = Point( kl.startPointX, kl.startPointY );
+			Point pt2 = Point( kl.endPointX, kl.endPointY );
+
+			/* draw line */
+
+			line( output, pt1, pt2, Scalar( 255, 0, 0 ), 5 );
+		}
 	}
 }
 
@@ -309,105 +353,39 @@ bool areSameLines(KeyLine &kl1, KeyLine &kl2){
 /* This function merges kl into mainLine. The idea is that mainLine's new startPoint will be the smallest x, and y, and the 
 endpoint will be the largest x and y.  */
 void mergeLines(KeyLine &mainLine, KeyLine &kl){
-		// Point mainLineMidPt = Point( (mainLine.startPointX + mainLine.endPointX)/2, (mainLine.startPointY + mainLine.endPointY)/2 );
-		// Point klMidPt = Point( (kl.startPointX + kl.endPointX)/2, (kl.startPointY + kl.endPointY)/2 );
+		Point mainLineMidPt = Point( (mainLine.startPointX + mainLine.endPointX)/2, (mainLine.startPointY + mainLine.endPointY)/2 );
+		Point klMidPt = Point( (kl.startPointX + kl.endPointX)/2, (kl.startPointY + kl.endPointY)/2 );
 
-		// float xDistance = std::abs(mainLineMidPt.x - klMidPt.x);
-		// float yDistance = std::abs(mainLineMidPt.y - klMidPt.y);
+		float xDistance = std::abs(mainLineMidPt.x - klMidPt.x);
+		float yDistance = std::abs(mainLineMidPt.y - klMidPt.y);
 
-		// float smallerMainLineX = (mainLine.startPointX < mainLine.endPointX) ? mainLine.startPointX : mainLine.endPointX;
-		// float smallerKlX = (kl.startPointX < kl.endPointX) ? kl.startPointX : kl.endPointX;
-		// float smallerMainLineY = (mainLine.startPointY <= mainLine.endPointY) ? mainLine.startPointY : mainLine.endPointY;
-		// float smallerKlY = (kl.startPointY <= kl.endPointY) ? kl.startPointY : kl.endPointY;
-		// float largerMainLineX = (mainLine.startPointX >= mainLine.endPointX) ? mainLine.startPointX : mainLine.endPointX;
-		// float largerKlX = (kl.startPointX >= kl.endPointX) ? kl.startPointX : kl.endPointX;
-		// float largerMainLineY = (mainLine.startPointY >= mainLine.endPointY) ? mainLine.startPointY : mainLine.endPointY;
-		// float largerKlY = (kl.startPointY >= kl.endPointY) ? kl.startPointY : kl.endPointY;
+		float smallerMainLineX = (mainLine.startPointX < mainLine.endPointX) ? mainLine.startPointX : mainLine.endPointX;
+		float smallerKlX = (kl.startPointX < kl.endPointX) ? kl.startPointX : kl.endPointX;
+		float smallerMainLineY = (mainLine.startPointY <= mainLine.endPointY) ? mainLine.startPointY : mainLine.endPointY;
+		float smallerKlY = (kl.startPointY <= kl.endPointY) ? kl.startPointY : kl.endPointY;
+		float largerMainLineX = (mainLine.startPointX >= mainLine.endPointX) ? mainLine.startPointX : mainLine.endPointX;
+		float largerKlX = (kl.startPointX >= kl.endPointX) ? kl.startPointX : kl.endPointX;
+		float largerMainLineY = (mainLine.startPointY >= mainLine.endPointY) ? mainLine.startPointY : mainLine.endPointY;
+		float largerKlY = (kl.startPointY >= kl.endPointY) ? kl.startPointY : kl.endPointY;
 		
-		// Point newStartPoint, newEndPoint;
-		// if( yDistance < xDistance ){
-		// 	// then, this line is likely to be a horizontal line.
-		// 	newStartPoint = Point( mainLine.startPointX, mainLine.startPointY);
-		// 	newEndPoint = Point( kl.endPointX, kl.endPointY); 
-		// }
-		// else {
-		// 	// This line is likely to be a vertical line
-		// 	// newStartPoint = Point( (smallerMainLineX + smallerKlX)/2, (smallerMainLineY < smallerKlY) ? smallerMainLineY : smallerKlY );
-		// 	// newEndPoint = Point( (largerMainLineX + largerKlX)/2, (largerMainLineY >= largerKlY) ? largerMainLineY : largerKlY );
-		// 	newStartPoint = Point( mainLine.startPointX, mainLine.startPointY);
-		// 	newEndPoint = Point( kl.endPointX, kl.endPointY); 
-		// }
-		mainLine.endPointX = kl.endPointX;
-		mainLine.endPointY = kl.endPointY;
-}
-
-
-/* Checks if any keyLines are close to each other after merging step. Then, we just
-   simply extend the lines and connect one another. */
-void connectEndPoints(vector<KeyLine> &keyLines){
-	for( int i = 0; i < keyLines.size(); i++ ) {
-		KeyLine currLine = keyLines[i];
-		for( int j = 0; j < keyLines.size(); j++ ){
-			KeyLine toCompare = keyLines[j];
-			int nearByType = getNearByType(&currLine, &toCompare); // 1. startToStart Point, 2. startToEndPoint, 3. endToStart Point, 4. endToEndPoint.
-			int distance = calcDistance(&currLine, &toCompare);
-			if( distance <= 50 ){
-				float tempCurrStartPointX = currLine.startPointX;
-				float tempCurrStartPointY = currLine.startPointY;
-				float tempCurrEndPointX = currLine.endPointX;
-				float tempCurrEndPointY = currLine.endPointY;
-				if( nearByType == 1 ){
-					currLine.startPointX = toCompare.startPointX;
-					currLine.startPointY = toCompare.startPointY;
-					toCompare.startPointX = tempCurrStartPointX;
-					toCompare.startPointY = tempCurrStartPointY;
-				}
-				else if( nearByType == 2 ){
-					currLine.startPointX = toCompare.endPointX;
-					currLine.startPointY = toCompare.endPointY;
-					toCompare.endPointX = tempCurrStartPointX;
-					toCompare.endPointY = tempCurrStartPointY;
-				}
-				else if( nearByType == 3 ){
-					currLine.endPointX = toCompare.startPointX;
-					currLine.endPointY = toCompare.startPointY;
-					toCompare.startPointX = tempCurrEndPointX;
-					toCompare.startPointY = tempCurrEndPointY;
-				}
-				else if( nearByType == 4 ){
-					currLine.endPointX = toCompare.endPointX;
-					currLine.endPointY = toCompare.endPointY;
-					toCompare.endPointX = tempCurrEndPointX;
-					toCompare.endPointY = tempCurrEndPointY;
-				}
-			}
+		Point newStartPoint, newEndPoint;
+		if( yDistance < xDistance ){
+			// then, this line is likely to be a horizontal line.
+			newStartPoint = Point( mainLine.startPointX, mainLine.startPointY);
+			newEndPoint = Point( kl.endPointX, kl.endPointY); 
 		}
-	}
-}
+		else {
+			// This line is likely to be a vertical line
+			// newStartPoint = Point( (smallerMainLineX + smallerKlX)/2, (smallerMainLineY < smallerKlY) ? smallerMainLineY : smallerKlY );
+			// newEndPoint = Point( (largerMainLineX + largerKlX)/2, (largerMainLineY >= largerKlY) ? largerMainLineY : largerKlY );
+			newStartPoint = Point( mainLine.startPointX, mainLine.startPointY);
+			newEndPoint = Point( kl.endPointX, kl.endPointY); 
+		}
 
-
-int getNearByType(KeyLine *kl1, KeyLine *kl2){
-	Point kl1StartPt = Point( kl1->startPointX, kl1->startPointY );
-	Point kl1EndPt = Point( kl1->endPointX, kl1->endPointY );
-	Point kl2StartPt = Point( kl2->startPointX, kl2->startPointY );
-	Point kl2EndPt = Point( kl2->endPointX, kl2->endPointY );
-	float startToStartXDiff = kl1StartPt.x - kl2StartPt.x;
-	float startToEndXDiff = kl1StartPt.x - kl2EndPt.x;
-	float startToStartYDiff = kl1StartPt.y - kl2StartPt.y;
-	float startToEndYDiff = kl1StartPt.y - kl2EndPt.y;
-	float endToStartXDiff = kl1EndPt.x - kl2StartPt.x;
-	float endToEndXDiff = kl1EndPt.x - kl2EndPt.x;
-	float endToStartYDiff = kl1EndPt.y - kl2StartPt.y;
-	float endToEndYDiff = kl1EndPt.y - kl2EndPt.y;
-	
-	float startToStart = sqrt(startToStartXDiff*startToStartXDiff + startToStartYDiff*startToStartYDiff);
-	float startToEnd = sqrt(startToEndXDiff*startToEndXDiff + startToEndYDiff*startToEndYDiff);
-	float endToStart = sqrt(endToStartXDiff*endToStartXDiff + endToStartYDiff*endToStartYDiff);
-	float endToEnd = sqrt(endToEndXDiff*endToEndXDiff + endToEndYDiff*endToEndYDiff);
-
-	int startToStartEnd = (startToStart <= startToEnd) ? 1 : 2;
-	int endToStartEnd = (endToStart <= endToEnd ) ? 3 : 4;
-	return ( (startToStartEnd <= endToStartEnd ) ? startToStartEnd : endToStartEnd );
+		mainLine.startPointX = newStartPoint.x;
+		mainLine.startPointY = newStartPoint.y;
+		mainLine.endPointX = newEndPoint.x;
+		mainLine.endPointY = newEndPoint.y;
 }
 
 
