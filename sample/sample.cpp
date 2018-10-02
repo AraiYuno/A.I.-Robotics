@@ -39,10 +39,17 @@ void connectEndPoints(vector<KeyLine> &keyLines);
 float calcDistance(KeyLine *kl1, KeyLine *kl2);
 float calcAngle(KeyLine &kl);
 bool areSameLines(KeyLine &kl1, KeyLine &kl2);
-void drawLines( Mat &output, vector<KeyLine> &keyLines);
+void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour);
 void sortKeyLines(vector<KeyLine> &keyLines);
 void mergeLines(KeyLine &mainLine, KeyLine &kl);
 int getNearByType(KeyLine *kl1, KeyLine *kl2);
+
+/* Intersection */
+bool isTCorner(KeyLine &kl1, KeyLine &kl2);
+bool doIntersect(Point p1, Point q1, Point p2, Point q2);
+int orientation(Point p, Point q, Point r);
+bool onSegment(Point p, Point q, Point r);
+
 
 /** @function main */
 int main( int argc, char** argv )
@@ -247,16 +254,22 @@ void drawField(Mat &img){
 
 	vector<KeyLine> mergedLines, goalLines, normalLines;
 	cleanUpLines( keylines, mergedLines);
-	//connectEndPoints(mergedLines);
+	connectEndPoints(mergedLines);
 	detectCorners( mergedLines, goalLines, normalLines );
-	drawLines(output, mergedLines);
+	drawLines(output, mergedLines, 2);
+	drawLines(output, goalLines, 0);
 
 	imshow("LSD", output);
 }
 
 
 void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
+	vector<KeyLine> tempLines;
 	do {
+		if( tempLines.size() > 1 ){
+			lines = tempLines;
+			tempLines = vector<KeyLine>();
+		}
 		bool mainLineIsSelected = false;
 		KeyLine mainLine;
 		int size = lines.size();
@@ -266,34 +279,34 @@ void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 				if( !mainLineIsSelected ){
 					mainLine = line;
 					mainLineIsSelected = true;
-					lines.erase(lines.begin() + i);
 				} else {
 					if( areSameLines(mainLine, line) ){ // we compare the mainLine and kl to see if we need to merge.
 						mergeLines(mainLine, line);
-						lines.erase(lines.begin() + i);
+					} else {
+						tempLines.push_back(lines[i]);	
 					}
 				}
 			} 
-			else {
-				lines.erase(lines.begin()+i); // if kl.octave isn't 0, we don't need to care of this kl anymore.
-			}
 		}
 
 		if( mainLine.lineLength > 20.0f )
 			mergedLines.push_back(mainLine);
-		cout << "KEYLINE: " + std::to_string(lines.size()) << endl;
-		cout << "MergedLines: " + std::to_string(mergedLines.size()) + "\n" << endl;
-	} while(lines.size() > 1);
+	} while(tempLines.size() > 1);
 }
 
 
-void drawLines( Mat &output, vector<KeyLine> &keyLines){
+void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour){
 	for( unsigned int i = 0; i < keyLines.size(); i++ ) {
 		KeyLine kl = keyLines[i];
 		Point pt1 = Point( kl.startPointX, kl.startPointY );
 		Point pt2 = Point( kl.endPointX, kl.endPointY );
 		/* draw line */
-		line( output, pt1, pt2, Scalar( 255, 0, 0 ), 5 );
+		if( colour == 0 ) // red T corners.
+			line( output, pt1, pt2, Scalar( 0, 0, 255 ), 5 );
+		else if( colour == 1 ) // yellow centre circle
+			line( output, pt1, pt2, Scalar( 0, 255, 255 ), 5 );
+		else if( colour == 2 ) // blue normal lines
+			line( output, pt1, pt2, Scalar( 255, 0, 0 ), 5 );
 	}
 }
 
@@ -318,9 +331,9 @@ void mergeLines(KeyLine &mainLine, KeyLine &kl){
 /* Checks if any keyLines are close to each other after merging step. Then, we just
    simply extend the lines and connect one another. */
 void connectEndPoints(vector<KeyLine> &keyLines){
-	for( int i = 0; i < keyLines.size(); i++ ) {
+	for( int i = 0; i < keyLines.size()-1; i++ ) {
 		KeyLine currLine = keyLines[i];
-		for( int j = 0; j < keyLines.size(); j++ ){
+		for( int j = i+1; j < keyLines.size(); j++ ){
 			KeyLine toCompare = keyLines[j];
 			int nearByType = getNearByType(&currLine, &toCompare); // 1. startToStart Point, 2. startToEndPoint, 3. endToStart Point, 4. endToEndPoint.
 			int distance = calcDistance(&currLine, &toCompare);
@@ -439,14 +452,131 @@ void sortKeyLines(vector<KeyLine> &keyLines){
 
 
 void detectCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines){
-
+	int mergedLinesSize = mergedLines.size();
+	for( int i = 0; i < mergedLinesSize-1; i++ ){
+		KeyLine mainLine = mergedLines[i];
+		for( int j = i + 1; j < mergedLinesSize; j++ ){
+			KeyLine toCompare = mergedLines[j];
+			if( isTCorner( mainLine, toCompare ) ){
+				if( mainLine.startPointX < toCompare.startPointX && mainLine.endPointX > toCompare.startPointX){
+					cornerLines.push_back(mainLine);
+				} else {
+					cornerLines.push_back(toCompare);
+				}
+				break;
+			}
+		}
+	}
+	cout << "Corner Lines Size: " + std::to_string(cornerLines.size()) << endl;
 }
 
 
 bool isTCorner(KeyLine &kl1, KeyLine &kl2){
+	bool isTCorner = false;
 	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
-	
-	// if( angleDifference > 50 ){
-	// 	if( ( ))
-	// }
+	if( angleDifference > 50 ){
+		Point kl1StartPt = Point( kl1.startPointX, kl1.startPointY);
+		Point kl1EndPt = Point( kl1.endPointX, kl1.endPointY);
+		Point kl2StartPt = Point( kl2.startPointX, kl2.startPointY);
+		Point kl2EndPt = Point( kl2.endPointX, kl2.endPointY);
+		
+		// if two lines intersect when the angle > 50, then we check each extremes of the line 
+		// to see if the lines are intersecting as T.
+		if( doIntersect(kl1StartPt, kl1EndPt, kl2StartPt, kl2EndPt) ){
+			float distance = calcDistance(&kl1, &kl2);
+			if( distance > 25.0f ){
+				isTCorner = true;
+			}
+		}
+	}
+	return isTCorner;
 }
+
+
+// To find orientation of ordered triplet (p, q, r). 
+// The function returns following values 
+// 0 --> p, q and r are colinear 
+// 1 --> Clockwise 
+// 2 --> Counterclockwise 
+int orientation(Point p, Point q, Point r) 
+{ 
+    // for details of below formula. 
+    int val = (q.y - p.y) * (r.x - q.x) - 
+              (q.x - p.x) * (r.y - q.y); 
+  
+    if (val == 0) return 0;  // colinear 
+  
+    return (val > 0)? 1: 2; // clock or counterclock wise 
+} 
+
+
+// Given three colinear points p, q, r, the function checks if 
+// point q lies on line segment 'pr' 
+bool onSegment(Point p, Point q, Point r) 
+{ 
+    if (q.x <= max(p.x, r.x) && q.x >= min(p.x, r.x) && 
+        q.y <= max(p.y, r.y) && q.y >= min(p.y, r.y)) 
+       return true; 
+  
+    return false; 
+} 
+
+
+// The main function that returns true if line segment 'p1q1' 
+// and 'p2q2' intersect. 
+bool doIntersect(Point p1, Point q1, Point p2, Point q2) 
+{ 
+	if( p1.x < q1.x ) {
+		p1.x = p1.x - 15;
+		q1.x = q1.x + 15;
+	} else {
+		p1.x = p1.x + 15;
+		q1.x = q1.x - 15;
+	}
+	if( p1.y < q1.y ) {
+		p1.y = p1.y - 15;
+		q1.y = q1.y + 15;
+	} else {
+		p1.y = p1.y + 15;
+		q1.y = q1.y - 15;
+	}
+	if( p2.x < q2.x ) {
+		p2.x = p2.x - 15;
+		q2.x = q2.x + 15;
+	} else {
+		p2.x = p2.x + 15;
+		q2.x = q2.x - 15;
+	}
+	if( p2.y < q2.y ) {
+		p2.y = p2.y - 15;
+		q2.y = q2.y + 15;
+	} else {
+		p2.y = p2.y + 15;
+		q2.y = q2.y - 15;
+	}
+    // Find the four orientations needed for general and 
+    // special cases 
+    int o1 = orientation(p1, q1, p2); 
+    int o2 = orientation(p1, q1, q2); 
+    int o3 = orientation(p2, q2, p1); 
+    int o4 = orientation(p2, q2, q1); 
+  
+    // General case 
+    if (o1 != o2 && o3 != o4) 
+        return true; 
+  
+    // Special Cases 
+    // p1, q1 and p2 are colinear and p2 lies on segment p1q1 
+    if (o1 == 0 && onSegment(p1, p2, q1)) return true; 
+  
+    // p1, q1 and q2 are colinear and q2 lies on segment p1q1 
+    if (o2 == 0 && onSegment(p1, q2, q1)) return true; 
+  
+    // p2, q2 and p1 are colinear and p1 lies on segment p2q2 
+    if (o3 == 0 && onSegment(p2, p1, q2)) return true; 
+  
+     // p2, q2 and q1 are colinear and q1 lies on segment p2q2 
+    if (o4 == 0 && onSegment(p2, q1, q2)) return true; 
+  
+    return false; // Doesn't fall in any of the above cases 
+} 
