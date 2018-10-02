@@ -445,5 +445,8 @@ void detectCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, v
 
 bool isTCorner(KeyLine &kl1, KeyLine &kl2){
 	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
-
+	
+	// if( angleDifference > 50 ){
+	// 	if( ( ))
+	// }
 }
