@@ -63,7 +63,8 @@ int main( int argc, char** argv )
 
 		//bgr_image = cameraFeed.clone();
 		resize(bgr_image, bgr_image, Size(300,300), 0,0,1);
-		
+		original = bgr_image.clone();
+
 		medianBlur(bgr_image, bgr_blur, 5);
 		cvtColor(bgr_blur, bgr_image, cv::COLOR_BGR2HSV);
 
@@ -143,7 +144,7 @@ void extractField(Mat &img, Mat &field)
 
 	Mat canny;
 
-	Mat result = bgr_image.clone();
+	Mat result = original.clone();
 	Mat out;
 	result.copyTo(out, hsv_threshold);
 
