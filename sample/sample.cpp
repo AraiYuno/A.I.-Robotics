@@ -31,16 +31,17 @@ void extractField(Mat &img, Mat &field);
 void fieldHandler(int event, int x, int y, int flags, void* param);
 void ballHandler(int event, int x, int y, int flags, void* param);
 void drawField(Mat &img);
-void drawLines( Mat &output, vector<KeyLine> &keyLines);
+void cleanUpLines( vector<KeyLine> &keyLines, vector<KeyLine> &mergedLines);
+void detectCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines);
 
 /* Helper functions */
 void connectEndPoints(vector<KeyLine> &keyLines);
 float calcDistance(KeyLine *kl1, KeyLine *kl2);
 float calcAngle(KeyLine &kl);
 bool areSameLines(KeyLine &kl1, KeyLine &kl2);
+void drawLines( Mat &output, vector<KeyLine> &keyLines);
 void sortKeyLines(vector<KeyLine> &keyLines);
 void mergeLines(KeyLine &mainLine, KeyLine &kl);
-void cleanUpLines( vector<KeyLine> &keyLines, vector<KeyLine> &mergedLines);
 int getNearByType(KeyLine *kl1, KeyLine *kl2);
 
 /** @function main */
@@ -244,10 +245,10 @@ void drawField(Mat &img){
 	if( output.channels() == 1 )
 		cvtColor( output, output, COLOR_GRAY2BGR );
 
-	vector<KeyLine> mergedLines;
+	vector<KeyLine> mergedLines, goalLines, normalLines;
 	cleanUpLines( keylines, mergedLines);
 	//connectEndPoints(mergedLines);
-	keylines = mergedLines;
+	detectCorners( mergedLines, goalLines, normalLines );
 	drawLines(output, mergedLines);
 
 	imshow("LSD", output);
@@ -278,7 +279,7 @@ void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 			}
 		}
 
-		if( mainLine.lineLength > 10.0f )
+		if( mainLine.lineLength > 20.0f )
 			mergedLines.push_back(mainLine);
 		cout << "KEYLINE: " + std::to_string(lines.size()) << endl;
 		cout << "MergedLines: " + std::to_string(mergedLines.size()) + "\n" << endl;
@@ -309,34 +310,6 @@ bool areSameLines(KeyLine &kl1, KeyLine &kl2){
 /* This function merges kl into mainLine. The idea is that mainLine's new startPoint will be the smallest x, and y, and the 
 endpoint will be the largest x and y.  */
 void mergeLines(KeyLine &mainLine, KeyLine &kl){
-		// Point mainLineMidPt = Point( (mainLine.startPointX + mainLine.endPointX)/2, (mainLine.startPointY + mainLine.endPointY)/2 );
-		// Point klMidPt = Point( (kl.startPointX + kl.endPointX)/2, (kl.startPointY + kl.endPointY)/2 );
-
-		// float xDistance = std::abs(mainLineMidPt.x - klMidPt.x);
-		// float yDistance = std::abs(mainLineMidPt.y - klMidPt.y);
-
-		// float smallerMainLineX = (mainLine.startPointX < mainLine.endPointX) ? mainLine.startPointX : mainLine.endPointX;
-		// float smallerKlX = (kl.startPointX < kl.endPointX) ? kl.startPointX : kl.endPointX;
-		// float smallerMainLineY = (mainLine.startPointY <= mainLine.endPointY) ? mainLine.startPointY : mainLine.endPointY;
-		// float smallerKlY = (kl.startPointY <= kl.endPointY) ? kl.startPointY : kl.endPointY;
-		// float largerMainLineX = (mainLine.startPointX >= mainLine.endPointX) ? mainLine.startPointX : mainLine.endPointX;
-		// float largerKlX = (kl.startPointX >= kl.endPointX) ? kl.startPointX : kl.endPointX;
-		// float largerMainLineY = (mainLine.startPointY >= mainLine.endPointY) ? mainLine.startPointY : mainLine.endPointY;
-		// float largerKlY = (kl.startPointY >= kl.endPointY) ? kl.startPointY : kl.endPointY;
-		
-		// Point newStartPoint, newEndPoint;
-		// if( yDistance < xDistance ){
-		// 	// then, this line is likely to be a horizontal line.
-		// 	newStartPoint = Point( mainLine.startPointX, mainLine.startPointY);
-		// 	newEndPoint = Point( kl.endPointX, kl.endPointY); 
-		// }
-		// else {
-		// 	// This line is likely to be a vertical line
-		// 	// newStartPoint = Point( (smallerMainLineX + smallerKlX)/2, (smallerMainLineY < smallerKlY) ? smallerMainLineY : smallerKlY );
-		// 	// newEndPoint = Point( (largerMainLineX + largerKlX)/2, (largerMainLineY >= largerKlY) ? largerMainLineY : largerKlY );
-		// 	newStartPoint = Point( mainLine.startPointX, mainLine.startPointY);
-		// 	newEndPoint = Point( kl.endPointX, kl.endPointY); 
-		// }
 		mainLine.endPointX = kl.endPointX;
 		mainLine.endPointY = kl.endPointY;
 }
@@ -462,4 +435,15 @@ void sortKeyLines(vector<KeyLine> &keyLines){
 			keyLines[maxIndex] = temp; 
 		}
 	}
+}
+
+
+void detectCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines){
+
+}
+
+
+bool isTCorner(KeyLine &kl1, KeyLine &kl2){
+	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
+
 }
