@@ -17,8 +17,8 @@ int ball_v_Low = 160; int ball_v_High = 255;
 int field_h_Low = 55; int field_h_High = 95; int field_s_Low = 149; int field_s_High = 189;
 int field_v_Low = 60; int field_v_High = 100;
 
-int line_h_Low = 76; int line_h_High = 100; int line_s_Low = 111; int line_s_High = 220;
-int line_v_Low = 29; int line_v_High = 246;
+int line_h_Low = 177; int line_h_High = 255; int line_s_Low = 182; int line_s_High = 255;
+int line_v_Low = 157; int line_v_High = 255;
 
 RNG rng(12345);
 
@@ -26,13 +26,14 @@ void updateCanny_Low(int, void* ){}
 
 void updateCanny_High(int, void* ){}
 
+
 Point3i trackBall(Mat &img);
 void extractField(Mat &img, Mat &field);
 void fieldHandler(int event, int x, int y, int flags, void* param);
 void ballHandler(int event, int x, int y, int flags, void* param);
 void drawField(Mat &img);
 void cleanUpLines( vector<KeyLine> &keyLines, vector<KeyLine> &mergedLines);
-void detectCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines);
+void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines);
 
 /* Helper functions */
 void connectEndPoints(vector<KeyLine> &keyLines);
@@ -43,12 +44,20 @@ void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour);
 void sortKeyLines(vector<KeyLine> &keyLines);
 void mergeLines(KeyLine &mainLine, KeyLine &kl);
 int getNearByType(KeyLine *kl1, KeyLine *kl2);
+bool areParallel(KeyLine &kl1, KeyLine &kl2);
+void mergeParalellLine(KeyLine &kl1, KeyLine &kl2);
+
 
 /* Intersection */
+void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines);
+void detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines);
+bool isLCorner(KeyLine &kl1, KeyLine &k12);
 bool isTCorner(KeyLine &kl1, KeyLine &kl2);
 bool doIntersect(Point p1, Point q1, Point p2, Point q2);
 int orientation(Point p, Point q, Point r);
 bool onSegment(Point p, Point q, Point r);
+Point getIntersectionPoint(Point p1, Point q1, Point p2, Point q2);
+
 
 
 /** @function main */
@@ -67,8 +76,8 @@ int main( int argc, char** argv )
 		cap.read(cameraFeed);
 
 		Mat bgr_blur, hsv_image;
-		bgr_image = imread("field1.jpg", CV_LOAD_IMAGE_COLOR);
-
+		bgr_image = imread("field3.jpg", CV_LOAD_IMAGE_COLOR);
+		
 		//bgr_image = cameraFeed.clone();
 		resize(bgr_image, bgr_image, Size(300,300), 0,0,1);
 		original = bgr_image.clone();
@@ -80,6 +89,7 @@ int main( int argc, char** argv )
 		setMouseCallback("Field Finder",fieldHandler, 0 );
 		imshow("Ball Finder", bgr_image);
 		setMouseCallback("Ball Finder", ballHandler, 0 );
+		
 	
 		Point3i ball = trackBall(bgr_image);
 
@@ -89,6 +99,7 @@ int main( int argc, char** argv )
 		Mat field;
 		
 		extractField(bgr_image, field);
+
 		drawField(field);
 
 		imshow("Field Control",field);
@@ -101,19 +112,38 @@ return 0;
 
 void fieldHandler(int event, int x, int y, int flags, void* param) {
 	if(event == CV_EVENT_LBUTTONDOWN){
-		Vec3b intensity = bgr_image.at<Vec3b>(y, x);
-		uchar blue = intensity.val[0];
-		uchar green = intensity.val[1];
-		uchar red = intensity.val[2];
+		Vec3b intensity = original.at<Vec3b>(y, x);
 
-		field_h_Low = (int)intensity[0] -20;
-		field_h_High = (int)intensity[0] +20;
 
-		field_s_Low = (int)intensity[1] -30;
-		field_s_High = (int)intensity[1] +30;
+		if((int)intensity[0] -20 < 0)
+			field_h_Low = 0;
+		else
+			field_h_Low = (int)intensity[0] -30;
+		
+		if((int)intensity[0] +30 > 255)
+			field_h_Low = 255;
+		else
+			field_h_Low = (int)intensity[0] +30;
 
-		field_v_Low = (int)intensity[2] -30;
-		field_v_High = (int)intensity[2] +30;
+		if((int)intensity[1] -30 < 0)
+			field_s_Low = 0;
+		else
+			field_s_Low = (int)intensity[1] -30;
+		
+		if((int)intensity[1] +30 > 255)
+			field_s_Low = 255;
+		else
+			field_s_Low = (int)intensity[1] +30;					
+
+		if((int)intensity[2] -30 < 0)
+			field_v_Low = 0;
+		else
+			field_v_Low = (int)intensity[2] -30;
+		
+		if((int)intensity[2] +30 > 255)
+			field_v_Low = 255;
+		else
+			field_v_Low = (int)intensity[2] +30;
 	}
 }
 
@@ -121,14 +151,72 @@ void ballHandler(int event, int x, int y, int flags, void* param) {
 	if(event == CV_EVENT_LBUTTONDOWN){
 		Vec3b intensity = bgr_image.at<Vec3b>(y, x);
 
-		ball_h_Low = (int)intensity[0] -20;
-		ball_h_High = (int)intensity[0] +20;
+		if((int)intensity[0] -20 < 0)
+			ball_h_Low = 0;
+		else
+			ball_h_Low = (int)intensity[0] -30;
+		
+		if((int)intensity[0] +30 > 255)
+			ball_h_Low = 255;
+		else
+			ball_h_Low = (int)intensity[0] +30;
 
-		ball_s_Low = (int)intensity[1] -30;
-		ball_s_High = (int)intensity[1] +30;
+		if((int)intensity[1] -30 < 0)
+			ball_s_Low = 0;
+		else
+			ball_s_Low = (int)intensity[1] -30;
+		
+		if((int)intensity[1] +30 > 255)
+			ball_s_Low = 255;
+		else
+			ball_s_Low = (int)intensity[1] +30;					
 
-		ball_v_Low = (int)intensity[2] -30;
-		ball_v_High = (int)intensity[2] +30;
+		if((int)intensity[2] -30 < 0)
+			ball_v_Low = 0;
+		else
+			ball_v_Low = (int)intensity[2] -30;
+		
+		if((int)intensity[2] +30 > 255)
+			ball_v_Low = 255;
+		else
+			ball_v_Low = (int)intensity[2] +30;
+	}
+}
+
+void lineHandler(int event, int x, int y, int flags, void* param) {
+	if(event == CV_EVENT_LBUTTONDOWN){
+		Vec3b intensity = bgr_image.at<Vec3b>(y, x);
+
+		if((int)intensity[0] -20 < 0)
+			line_h_Low = 0;
+		else
+			line_h_Low = (int)intensity[0] -30;
+		
+		if((int)intensity[0] +30 > 255)
+			line_h_Low = 255;
+		else
+			line_h_Low = (int)intensity[0] +30;
+
+		if((int)intensity[1] -30 < 0)
+			line_s_Low = 0;
+		else
+			line_s_Low = (int)intensity[1] -30;
+		
+		if((int)intensity[1] +30 > 255)
+			line_s_Low = 255;
+		else
+			line_s_Low = (int)intensity[1] +30;					
+
+		if((int)intensity[2] -30 < 0)
+			line_v_Low = 0;
+		else
+			line_v_Low = (int)intensity[2] -30;
+		
+		if((int)intensity[2] +30 > 255)
+			line_v_Low = 255;
+		else
+			line_v_Low = (int)intensity[2] +30;
+
 	}
 }
 
@@ -147,7 +235,7 @@ void extractField(Mat &img, Mat &field)
 
 	inRange(img, cv::Scalar(field_h_Low, field_s_Low, field_v_Low), cv::Scalar(field_h_High, field_s_High, field_v_High), hsv_threshold);
 	
-	Mat element = getStructuringElement(MORPH_RECT,Size(30,30), Point(1,1));
+	Mat element = getStructuringElement(MORPH_RECT,Size(50,50), Point(1,1));
 	morphologyEx(hsv_threshold, hsv_threshold, MORPH_CLOSE , element);
 
 	Mat canny;
@@ -236,28 +324,57 @@ Point3i trackBall(Mat &img)
 	return result;	
 }
 
-void drawField(Mat &img){
-	resize(img, img, Size(700,700),0,0,CV_INTER_LINEAR);
+void drawField(Mat &hsv_img){
+
+
+	namedWindow( "Line Control", CV_WINDOW_AUTOSIZE );
+	createTrackbar( "h (Low):", "Line Control", &line_h_Low, 255, updateCanny_Low);
+	createTrackbar( "h (High):", "Line Control", &line_h_High, 255, updateCanny_High);
+	createTrackbar( "s (Low):", "Line Control", &line_s_Low, 255, updateCanny_Low);
+	createTrackbar( "s (High):", "Line Control", &line_s_High, 255, updateCanny_High);
+	createTrackbar( "v (Low):", "Line Control", &line_v_Low, 255, updateCanny_Low);
+	createTrackbar( "v (High):", "Line Control", &line_v_High, 255, updateCanny_High);
+
+	medianBlur(hsv_img, hsv_img, 5);
+	Mat cann, img;
+	inRange(hsv_img, cv::Scalar(line_h_Low, line_s_Low, line_v_Low), cv::Scalar(line_h_High, line_s_High, line_v_High), cann);
+	bitwise_not ( cann, img );
+	//Canny(cann, img, 100,255,3);
+	imshow("Line Control", img);
+	resize(img, img, Size(300,300),0,0,CV_INTER_LINEAR);
 	Mat mask = Mat::ones( img.size(), CV_8UC1 );
 
-	/* create a pointer to an LSDDetector object */
-	Ptr<LSDDetector> lsd = LSDDetector::createLSDDetector();
-	/* compute lines */
-	std::vector<KeyLine> keylines;
-	lsd->detect( img, keylines, 1, 1, mask );
-	sortKeyLines(keylines);
 
-	/* draw lines extracted from octave 0 */
+	Ptr<LineSegmentDetector> ls = createLineSegmentDetector(LSD_REFINE_STD);
+	    // Detect the lines
+	vector<Vec4f> lines_std;
+	std::vector<KeyLine> keyLines;
+    ls->detect(img, lines_std);
+
+	for(int i = 0; i < lines_std.size(); i++)
+	{
+		KeyLine key = KeyLine();
+		Vec4f vec = lines_std[i];
+		key.startPointX = vec[0];
+		key.startPointY = vec[1];
+		key.endPointX =  vec[2];
+		key.endPointY = vec[3];
+		keyLines.push_back(key);
+	}
+    // Show found lines
+	sortKeyLines(keyLines);
+
 	cv::Mat output = img.clone();
 	if( output.channels() == 1 )
 		cvtColor( output, output, COLOR_GRAY2BGR );
 
-	vector<KeyLine> mergedLines, goalLines, normalLines;
-	cleanUpLines( keylines, mergedLines);
-	connectEndPoints(mergedLines);
-	detectCorners( mergedLines, goalLines, normalLines );
+	vector<KeyLine> mergedLines, tCornerLines, tCornerLCornerLines, normalLines, circleLineCorners;
+	cleanUpLines( keyLines, mergedLines);
+	detectTCorners( mergedLines, tCornerLines, normalLines );
 	drawLines(output, mergedLines, 2);
-	drawLines(output, goalLines, 0);
+	detectLCorners( mergedLines, tCornerLCornerLines );
+	cout << tCornerLines.size() << endl;
+	drawLines(output, tCornerLines, 0);
 
 	imshow("LSD", output);
 }
@@ -288,10 +405,20 @@ void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 				}
 			} 
 		}
-
-		if( mainLine.lineLength > 20.0f )
+		// if( mainLine.lineLength > 35.0f )
 			mergedLines.push_back(mainLine);
 	} while(tempLines.size() > 1);
+
+	vector<KeyLine> parallelLines;
+	int size = mergedLines.size();
+	for( int i = 0; i < size - 1; i++ ){
+		for( int j = i + 1; j < size; j++ ){
+			if( areParallel( mergedLines[i], mergedLines[j]) ){
+				mergeParalellLine( mergedLines[i], mergedLines[j]);
+				parallelLines.push_back(mergedLines[i]);
+			} 
+		}
+	}
 }
 
 
@@ -300,6 +427,11 @@ void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour){
 		KeyLine kl = keyLines[i];
 		Point pt1 = Point( kl.startPointX, kl.startPointY );
 		Point pt2 = Point( kl.endPointX, kl.endPointY );
+		// int R = ( rand() % (int) ( 255 + 1 ) );
+		// int G = ( rand() % (int) ( 255 + 1 ) );
+		// int B = ( rand() % (int) ( 255 + 1 ) );
+		// line( output, pt1, pt2, Scalar( B, G, R ), 5 );
+
 		/* draw line */
 		if( colour == 0 ) // red T corners.
 			line( output, pt1, pt2, Scalar( 0, 0, 255 ), 5 );
@@ -311,12 +443,44 @@ void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour){
 }
 
 
+void mergeParalellLine(KeyLine &kl1, KeyLine &kl2){
+	Point kl1MidPoint = Point( (kl1.startPointX + kl1.endPointX)/ 2, (kl1.startPointY + kl1.endPointY)/2 );
+	Point kl2MidPoint = Point( (kl2.startPointX + kl2.endPointX)/ 2, (kl2.startPointY + kl2.endPointY)/2 );
+	float distanceX = std::abs( kl2MidPoint.x - kl1MidPoint.x);
+	float distanceY = std::abs( kl2MidPoint.y - kl1MidPoint.y);
+	if( distanceX < distanceY ) {
+		// then the two lines are parallel vertically.
+		kl1.startPointX = (kl1.startPointX + kl2.startPointX)/2;
+		kl1.startPointY = (kl1.startPointY < kl2.startPointY) ? kl2.startPointY : kl1.startPointY;
+		kl1.endPointX = (kl1.endPointX + kl2.startPointX)/2;
+		kl1.endPointY = (kl1.endPointY > kl2.endPointY) ? kl1.endPointY : kl2.endPointY;
+	} else {
+		kl1.startPointY = (kl1.startPointY + kl2.startPointY)/2;
+		kl1.startPointX = (kl1.startPointX < kl2.startPointX) ? kl2.startPointX : kl1.startPointX;
+		kl1.endPointY = (kl1.endPointY + kl2.startPointY)/2;
+		kl1.endPointX = (kl1.endPointX > kl2.endPointX) ? kl1.endPointX : kl2.endPointX;
+	}
+}
+
+
 /* If two lines are near to one another, and have similar angles, we consider
 them to be the same lines to be merged. */
 bool areSameLines(KeyLine &kl1, KeyLine &kl2){
 	float distance = calcDistance(&kl1, &kl2);
 	float angleDifference = calcAngle(kl1) - calcAngle(kl2);
-	return (distance < 25  && std::abs(angleDifference) < 30) ? true : false;
+	return (distance < 25.0f  && std::abs(angleDifference) < 20) ? true : false;
+}
+
+
+bool areParallel(KeyLine &kl1, KeyLine &kl2){
+	bool areParallel = false;
+	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
+	if( angleDifference < 20.f ){
+		if( calcDistance(&kl1, &kl2) < 80.0f ){
+			areParallel = true;
+		}
+	}
+	return areParallel;
 }
 
 
@@ -337,16 +501,20 @@ void connectEndPoints(vector<KeyLine> &keyLines){
 			KeyLine toCompare = keyLines[j];
 			int nearByType = getNearByType(&currLine, &toCompare); // 1. startToStart Point, 2. startToEndPoint, 3. endToStart Point, 4. endToEndPoint.
 			int distance = calcDistance(&currLine, &toCompare);
+			Point p1 = Point( currLine.startPointX, currLine.startPointY );
+			Point q1 = Point( currLine.endPointX, currLine.endPointY );
+			Point p2 = Point( toCompare.startPointX, toCompare.startPointX );
+			Point q2 = Point( toCompare.endPointX, toCompare.endPointY );
 			if( distance <= 50 ){
 				float tempCurrStartPointX = currLine.startPointX;
 				float tempCurrStartPointY = currLine.startPointY;
 				float tempCurrEndPointX = currLine.endPointX;
 				float tempCurrEndPointY = currLine.endPointY;
 				if( nearByType == 1 ){
-					currLine.startPointX = toCompare.startPointX;
-					currLine.startPointY = toCompare.startPointY;
-					toCompare.startPointX = tempCurrStartPointX;
-					toCompare.startPointY = tempCurrStartPointY;
+					keyLines[i].startPointX = toCompare.startPointX;
+					keyLines[i].startPointY = toCompare.startPointY;
+					keyLines[j].startPointX = tempCurrStartPointX;
+					keyLines[j].startPointY = tempCurrStartPointY;
 				}
 				else if( nearByType == 2 ){
 					currLine.startPointX = toCompare.endPointX;
@@ -402,7 +570,7 @@ float calcDistance(KeyLine *kl1, KeyLine *kl2){
 	Point kl1EndPt = Point( kl1->endPointX, kl1->endPointY );
 	Point kl2StartPt = Point( kl2->startPointX, kl2->startPointY );
 	Point kl2EndPt = Point( kl2->endPointX, kl2->endPointY );
-	//cout << std::to_string(kl1EndPt.x) + ", " + std::to_string(kl1EndPt.y) +" : " + std::to_string(kl2StartPt.x) + ", " + std::to_string(kl2StartPt.y) << endl;
+
 	float startToStartXDiff = kl1StartPt.x - kl2StartPt.x;
 	float startToEndXDiff = kl1StartPt.x - kl2EndPt.x;
 	float startToStartYDiff = kl1StartPt.y - kl2StartPt.y;
@@ -428,6 +596,7 @@ float calcAngle(KeyLine &kl){
 	return angle * 180.0f / 3.141592f;
 }
 
+
 //=================================================================================
 // sortKeyLines(vector<KeyLine> *keyLines)
 //   this function sorts the keyLines by X coordinate, then Y if two x's are the same.
@@ -451,23 +620,95 @@ void sortKeyLines(vector<KeyLine> &keyLines){
 }
 
 
-void detectCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines){
+void detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines){
+	int linesSize = lines.size();
+	for( int i = 0; i < linesSize - 1; i++ ){
+		KeyLine mainLine = lines[i];
+		for( int j = i + 1; j < linesSize; j++ ){
+			KeyLine toCompare = lines[j];
+			if( isLCorner( mainLine, toCompare ) ){
+				cornerLines.push_back(mainLine);
+				cornerLines.push_back(toCompare);
+				break;
+			}
+		}
+	}
+}
+
+
+bool isLCorner(KeyLine &kl1, KeyLine &kl2){
+	bool isLCorner = false;
+	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
+	if( angleDifference > 50 ){
+		Point kl1StartPt = Point( kl1.startPointX, kl1.startPointY);
+		Point kl1EndPt = Point( kl1.endPointX, kl1.endPointY);
+		Point kl2StartPt = Point( kl2.startPointX, kl2.startPointY);
+		Point kl2EndPt = Point( kl2.endPointX, kl2.endPointY);
+		// if two lines intersect when the angle > 50, then we check each extremes of the line 
+		// to see if the lines are intersecting as T.
+		if( doIntersect(kl1StartPt, kl1EndPt, kl2StartPt, kl2EndPt) ){
+			float distance = calcDistance(&kl1, &kl2);
+			if( distance <= 25.0f ){
+				isLCorner = true;
+			}
+		}
+	}
+	return isLCorner;
+}
+
+
+void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines){
 	int mergedLinesSize = mergedLines.size();
 	for( int i = 0; i < mergedLinesSize-1; i++ ){
 		KeyLine mainLine = mergedLines[i];
 		for( int j = i + 1; j < mergedLinesSize; j++ ){
 			KeyLine toCompare = mergedLines[j];
 			if( isTCorner( mainLine, toCompare ) ){
+				KeyLine tCornerLine;
 				if( mainLine.startPointX < toCompare.startPointX && mainLine.endPointX > toCompare.startPointX){
-					cornerLines.push_back(mainLine);
+					tCornerLine = mainLine;
 				} else {
-					cornerLines.push_back(toCompare);
+					tCornerLine = toCompare;
 				}
+				bool isCirCleLineCorner = true;
+				for( int k = 0; k < mergedLinesSize; k++ ){
+					if( isLCorner(tCornerLine, mergedLines[k])) {
+						isCirCleLineCorner = false;
+						break;
+					}
+				}
+				if( isCirCleLineCorner )
+					cornerLines.push_back(tCornerLine);
 				break;
 			}
 		}
 	}
-	cout << "Corner Lines Size: " + std::to_string(cornerLines.size()) << endl;
+}
+
+
+void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines){
+	int mergedLinesSize = mergedLines.size();
+	for( int i = 0; i < mergedLinesSize-1; i++ ){
+		KeyLine mainLine = mergedLines[i];
+		for( int j = i + 1; j < mergedLinesSize; j++ ){
+			KeyLine toCompare = mergedLines[j];
+			if( isTCorner( mainLine, toCompare ) ){
+				KeyLine tCornerLine;
+				if( mainLine.startPointX < toCompare.startPointX && mainLine.endPointX > toCompare.startPointX){
+					cornerLines.push_back(mainLine);
+					tCornerLine = mainLine;
+				} else {
+					cornerLines.push_back(toCompare);
+					tCornerLine = toCompare;
+				}
+				for( int k = 0; k < mergedLinesSize; k++ ){
+					if( isLCorner(tCornerLine, mergedLines[k])) {
+						cornerLines.push_back(mergedLines[k]);
+					}
+				}
+			}
+		}
+	}
 }
 
 
@@ -484,7 +725,7 @@ bool isTCorner(KeyLine &kl1, KeyLine &kl2){
 		// to see if the lines are intersecting as T.
 		if( doIntersect(kl1StartPt, kl1EndPt, kl2StartPt, kl2EndPt) ){
 			float distance = calcDistance(&kl1, &kl2);
-			if( distance > 25.0f ){
+			if( distance > 15.0f ){
 				isTCorner = true;
 			}
 		}
@@ -527,32 +768,32 @@ bool onSegment(Point p, Point q, Point r)
 bool doIntersect(Point p1, Point q1, Point p2, Point q2) 
 { 
 	if( p1.x < q1.x ) {
-		p1.x = p1.x - 15;
-		q1.x = q1.x + 15;
+		p1.x = p1.x - 10;
+		q1.x = q1.x + 10;
 	} else {
-		p1.x = p1.x + 15;
-		q1.x = q1.x - 15;
+		p1.x = p1.x + 10;
+		q1.x = q1.x - 10;
 	}
 	if( p1.y < q1.y ) {
-		p1.y = p1.y - 15;
-		q1.y = q1.y + 15;
+		p1.y = p1.y - 10;
+		q1.y = q1.y + 10;
 	} else {
-		p1.y = p1.y + 15;
-		q1.y = q1.y - 15;
+		p1.y = p1.y + 10;
+		q1.y = q1.y - 10;
 	}
 	if( p2.x < q2.x ) {
-		p2.x = p2.x - 15;
-		q2.x = q2.x + 15;
+		p2.x = p2.x - 10;
+		q2.x = q2.x + 10;
 	} else {
-		p2.x = p2.x + 15;
-		q2.x = q2.x - 15;
+		p2.x = p2.x + 10;
+		q2.x = q2.x - 10;
 	}
 	if( p2.y < q2.y ) {
-		p2.y = p2.y - 15;
-		q2.y = q2.y + 15;
+		p2.y = p2.y - 10;
+		q2.y = q2.y + 10;
 	} else {
-		p2.y = p2.y + 15;
-		q2.y = q2.y - 15;
+		p2.y = p2.y + 10;
+		q2.y = q2.y - 10;
 	}
     // Find the four orientations needed for general and 
     // special cases 
@@ -579,4 +820,61 @@ bool doIntersect(Point p1, Point q1, Point p2, Point q2)
     if (o4 == 0 && onSegment(p2, q1, q2)) return true; 
   
     return false; // Doesn't fall in any of the above cases 
+} 
+
+
+Point getIntersectionPoint(Point p1, Point q1, Point p2, Point q2) 
+{ 
+	if( p1.x < q1.x ) {
+		p1.x = p1.x - 45;
+		q1.x = q1.x + 45;
+	} else {
+		p1.x = p1.x + 45;
+		q1.x = q1.x - 45;
+	}
+	if( p1.y < q1.y ) {
+		p1.y = p1.y - 45;
+		q1.y = q1.y + 45;
+	} else {
+		p1.y = p1.y + 45;
+		q1.y = q1.y - 45;
+	}
+	if( p2.x < q2.x ) {
+		p2.x = p2.x - 45;
+		q2.x = q2.x + 45;
+	} else {
+		p2.x = p2.x + 45;
+		q2.x = q2.x - 45;
+	}
+	if( p2.y < q2.y ) {
+		p2.y = p2.y - 45;
+		q2.y = q2.y + 45;
+	} else {
+		p2.y = p2.y + 45;
+		q2.y = q2.y - 45;
+	}
+    // Line AB represented as a1x + b1y = c1 
+    float a1 = q1.y - p1.y; 
+    float b1 = p1.x - q1.x; 
+    float c1 = a1*(p1.x) + b1*(p1.y); 
+  
+    // Line CD represented as a2x + b2y = c2 
+    float a2 = q2.y - p2.y; 
+    float b2 = p2.x - q2.x; 
+    float c2 = a2*(p2.x)+ b2*(p2.y); 
+  
+	float determinant = a1*b2 - a2*b1; 
+  
+    if (determinant == 0) 
+    { 
+        // The lines are parallel. This is simplified 
+        // by returning a pair of FLT_MAX 
+        return Point(-1, -1); 
+    } 
+    else
+    { 
+        float x = (b2*c1 - b1*c2)/determinant; 
+        float y = (a1*c2 - a2*c1)/determinant; 
+        return Point(x, y); 
+    } 
 } 
