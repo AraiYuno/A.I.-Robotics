@@ -344,7 +344,6 @@ void drawField(Mat &hsv_img){
 	resize(img, img, Size(300,300),0,0,CV_INTER_LINEAR);
 	Mat mask = Mat::ones( img.size(), CV_8UC1 );
 
-
 	Ptr<LineSegmentDetector> ls = createLineSegmentDetector(LSD_REFINE_STD);
 	    // Detect the lines
 	vector<Vec4f> lines_std;
@@ -363,7 +362,6 @@ void drawField(Mat &hsv_img){
 	}
     // Show found lines
 	sortKeyLines(keyLines);
-
 	cv::Mat output = img.clone();
 	if( output.channels() == 1 )
 		cvtColor( output, output, COLOR_GRAY2BGR );
@@ -372,10 +370,9 @@ void drawField(Mat &hsv_img){
 	cleanUpLines( keyLines, mergedLines);
 	detectTCorners( mergedLines, tCornerLines, normalLines );
 	drawLines(output, mergedLines, 2);
-	detectLCorners( mergedLines, tCornerLCornerLines );
-	cout << tCornerLines.size() << endl;
+	// detectLCorners( mergedLines, tCornerLCornerLines );
 	drawLines(output, tCornerLines, 0);
-
+	//cout << "!! " << endl;
 	imshow("LSD", output);
 }
 
@@ -603,18 +600,19 @@ float calcAngle(KeyLine &kl){
 //=================================================================================
 void sortKeyLines(vector<KeyLine> &keyLines){
 	int maxIndex;
-	for( int i = 0; i < keyLines.size()-1; i++ ){
-		maxIndex = i;
-		for( int j = i + 1; j < keyLines.size(); j++ ) {
-			if( keyLines[j].startPointX > keyLines[maxIndex].startPointX){
-				maxIndex = j;
+	if( keyLines.size() > 1 ){
+		for( int i = 0; i < keyLines.size()-1; i++ ){
+			maxIndex = i;
+			for( int j = i + 1; j < keyLines.size(); j++ ) {
+				if( keyLines[j].startPointX > keyLines[maxIndex].startPointX){
+					maxIndex = j;
+				}
 			}
-		}
-
-		if( maxIndex != i ){
-			KeyLine temp = keyLines[i];
-			keyLines[i] = keyLines[maxIndex];
-			keyLines[maxIndex] = temp; 
+			if( maxIndex != i ){
+				KeyLine temp = keyLines[i];
+				keyLines[i] = keyLines[maxIndex];
+				keyLines[maxIndex] = temp; 
+			}
 		}
 	}
 }
