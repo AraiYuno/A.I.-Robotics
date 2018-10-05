@@ -74,7 +74,7 @@ int main( int argc, char** argv )
 		cap.read(cameraFeed);
 
 		Mat bgr_blur, hsv_image;
-		bgr_image = imread("field2.jpg", CV_LOAD_IMAGE_COLOR);
+		bgr_image = imread("field3.jpg", CV_LOAD_IMAGE_COLOR);
 		
 		//bgr_image = cameraFeed.clone();
 		resize(bgr_image, bgr_image, Size(300,300), 0,0,1);
@@ -95,13 +95,9 @@ int main( int argc, char** argv )
 			circle(bgr_image, Point(ball.x, ball.y), ball.z, Scalar(255,0,0), 2);
 
 		Mat field;
-		
 		extractField(bgr_image, field);
-
 		drawField(field);
-
 		imshow("Field Control",field);
-		
 		waitKey(30);
 	}
 return 0;
@@ -322,9 +318,12 @@ Point3i trackBall(Mat &img)
 	return result;	
 }
 
+
+/* 
+	drawField function detects line segments from the extracted field img, and draws the lines as different
+	colours per features.
+*/
 void drawField(Mat &hsv_img){
-
-
 	namedWindow( "Line Control", CV_WINDOW_AUTOSIZE );
 	createTrackbar( "h (Low):", "Line Control", &line_h_Low, 255, updateCanny_Low);
 	createTrackbar( "h (High):", "Line Control", &line_h_High, 255, updateCanny_High);
@@ -337,7 +336,6 @@ void drawField(Mat &hsv_img){
 	Mat cann, img;
 	inRange(hsv_img, cv::Scalar(line_h_Low, line_s_Low, line_v_Low), cv::Scalar(line_h_High, line_s_High, line_v_High), cann);
 	bitwise_not ( cann, img );
-	//Canny(cann, img, 100,255,3);
 	imshow("Line Control", img);
 	resize(img, img, Size(300,300),0,0,CV_INTER_LINEAR);
 	Mat mask = Mat::ones( img.size(), CV_8UC1 );
@@ -348,6 +346,7 @@ void drawField(Mat &hsv_img){
 	std::vector<KeyLine> keyLines;
     ls->detect(img, lines_std);
 
+	// convert all the vec4f to KeyLine for calculation convenience.
 	for(int i = 0; i < lines_std.size(); i++)
 	{
 		KeyLine key = KeyLine();
@@ -358,7 +357,8 @@ void drawField(Mat &hsv_img){
 		key.endPointY = vec[3];
 		keyLines.push_back(key);
 	}
-    // Show found lines
+
+	// sort the lines by x in ascending order using startPointX
 	sortKeyLines(keyLines);
 	cv::Mat output = img.clone();
 	if( output.channels() == 1 )
@@ -367,15 +367,20 @@ void drawField(Mat &hsv_img){
 	vector<KeyLine> mergedLines, tCornerLines, tCornerLCornerLines, normalLines, circleLineCorners;
 	cleanUpLines( keyLines, mergedLines);
 	detectTCorners( mergedLines, tCornerLines, normalLines );
+	detectCircleTCorner( mergedLines, circleLineCorners );
 	drawLines(output, mergedLines, 2);
-	// detectLCorners( mergedLines, tCornerLCornerLines );
 	drawLines(output, tCornerLines, 0);
+	drawLines(output, circleLineCorners, 3);
 	imshow("LSD", output);
 }
 
 
+/* Summary: cleanUpLines is the main merging function which merges all the colinear and parallel lines detected by the LSD function. 
+*/
 void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 	vector<KeyLine> tempLines;
+
+	// in this do_while loop, we join all the colinear lines.
 	do {
 		if( tempLines.size() > 1 ){
 			lines = tempLines;
@@ -390,9 +395,7 @@ void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 				mainLine = line;
 				mainLineIsSelected = true;
 			} else {
-				switchStartAndEnd(mainLine);
-				// cout << "MainLine: " + std::to_string(mainLine.startPointX) + ", " +std::to_string(mainLine.startPointY) + " - " + std::to_string(mainLine.endPointX) +", " + std::to_string(mainLine.endPointY) << endl;
-				// cout << "Line: " + std::to_string(line.startPointX) + ", " +std::to_string(line.startPointY) + " - " + std::to_string(line.endPointX) +", " + std::to_string(line.endPointY) << endl;
+				switchStartAndEnd(mainLine); // to make sure that startPointX is the smaller value than endPointX at all times.
 				if( areSameLines(mainLine, line) ){ // we compare the mainLine and kl to see if we need to merge.
 					mergeLines(mainLine, line);
 				} else {
@@ -404,11 +407,12 @@ void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 	} while(tempLines.size() > 1);
 
 
-
+	// to make sure startPointX is always the smaller value than endPointX.
 	for( int i = 0; i < mergedLines.size(); i++ ){
 		switchStartAndEnd(mergedLines[i]);
 	}
 
+	// This segment of code merges parallel lines.
 	vector<KeyLine> parallelLines;
 	int size = mergedLines.size();
 	for( int i = 0; i < size; i++ ){
@@ -430,6 +434,8 @@ void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 }
 
 
+/* Summary: drawLines simply draws lines.
+ */
 void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour){
 	for( unsigned int i = 0; i < keyLines.size(); i++ ) {
 		KeyLine kl = keyLines[i];
@@ -443,10 +449,14 @@ void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour){
 			line( output, pt1, pt2, Scalar( 0, 255, 255 ), 5 );
 		else if( colour == 2 ) // blue normal lines
 			line( output, pt1, pt2, Scalar( 255, 0, 0 ), 5 );
+		else if( colour == 3 ) // pink for circle line corners.
+			line( output, pt1, pt2, Scalar( 180, 105, 255 ), 5 );			
 	}
 }
 
 
+/* Summary: main merging function for the parallel lines.
+*/
 bool mergeParalellLine(KeyLine &kl1, KeyLine &kl2){
 	bool areParallel = false;
 	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
@@ -457,18 +467,14 @@ bool mergeParalellLine(KeyLine &kl1, KeyLine &kl2){
 	float endToStartY = std::abs(kl1.startPointY - kl2.endPointY);
 	float yDistance = (startToStartY <= endToStartY) ? startToStartY : endToStartY;
 
-	// cout << "kl1: " + std::to_string(kl1.startPointX) + ", " +std::to_string(kl1.startPointY) + " - " + std::to_string(kl1.endPointX) +", " + std::to_string(kl1.endPointY) << endl;
-	// cout << "kl2: " + std::to_string(kl2.startPointX) + ", " +std::to_string(kl2.startPointY) + " - " + std::to_string(kl2.endPointX) +", " + std::to_string(kl2.endPointY) << endl;
-	// cout << "distance: " + std::to_string(calcDistance(&kl1, &kl2)) << endl;
-	// cout << "angleDifference: " + std::to_string(angleDifference) + ", kl1: " + std::to_string(calcAngle(kl1)) + ", kl2: " + std::to_string(calcAngle(kl2)) << endl;
-
+	// we consider any line that has angle less than 25 degrees, with distance less than 45.0f between any extremes as parallel lines.
 	if( angleDifference < 25.f ){
 		if( (xDistance <= 25.0f || yDistance <= 25.0f) && calcDistance(&kl1, &kl2) < 45.0f){
-			// cout << "BINGO " << endl;
 			areParallel = true;
 		}
 	}
 
+	// if two lines are parallel, we take the midpoints of each extreme.
 	if( areParallel ){
 		kl1.startPointX = (kl1.startPointX + kl2.startPointX)/2;
 		kl1.startPointY = (kl1.startPointY + kl2.startPointY)/2;
@@ -480,7 +486,7 @@ bool mergeParalellLine(KeyLine &kl1, KeyLine &kl2){
 
 
 /* If two lines are near to one another, and have similar angles, we consider
-them to be the same lines to be merged. */
+them to be the colinear lines to be merged. */
 bool areSameLines(KeyLine &kl1, KeyLine &kl2){
 	float distance = calcDistance(&kl1, &kl2);
 	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
@@ -488,14 +494,15 @@ bool areSameLines(KeyLine &kl1, KeyLine &kl2){
 }
 
 
-/* This function merges kl into mainLine. The idea is that mainLine's new startPoint will be the smallest x, and y, and the 
-endpoint will be the largest x and y.  */
+/* Summary: since the lines are already sorted by x in ascending order, we can simply extend mainLine
+by setting its endPoint to kl's endPoint. */
 void mergeLines(KeyLine &mainLine, KeyLine &kl){
 	mainLine.endPointX = kl.endPointX;
 	mainLine.endPointY = kl.endPointY;
 }
 
 
+/* Summary: calcDistance calculates and returns the minimum distance amongst the combinations of 4 points (2 line segments)*/
 float calcDistance(KeyLine *kl1, KeyLine *kl2){
 	Point kl1StartPt = Point( kl1->startPointX, kl1->startPointY );
 	Point kl1EndPt = Point( kl1->endPointX, kl1->endPointY );
@@ -522,6 +529,7 @@ float calcDistance(KeyLine *kl1, KeyLine *kl2){
 }
 
 
+/* Summary: calcAngle simply caculates the angle of the given line segment in range of 0 ~ 180 degrees. */
 float calcAngle(KeyLine &kl){
 	float angle;
 	angle = atan2(kl.startPointY, kl.startPointX)  - atan2(kl.endPointY, kl.endPointX);
@@ -532,10 +540,8 @@ float calcAngle(KeyLine &kl){
 }
 
 
-//=================================================================================
-// sortKeyLines(vector<KeyLine> *keyLines)
-//   this function sorts the keyLines by X coordinate, then Y if two x's are the same.
-//=================================================================================
+/* Summary: sortKeyLines simply sorts the given keyLines by x in ascending order using startPointX. 
+If the startPointX is larger than its endPointX, we simply switch the extreme the other way.*/
 void sortKeyLines(vector<KeyLine> &keyLines){
 	if( keyLines.size() > 1 ){
 		int i, key, j; 
@@ -548,9 +554,6 @@ void sortKeyLines(vector<KeyLine> &keyLines){
 			KeyLine keyLine = keyLines[i];
 			j = i-1; 
 		
-			/* Move elements of arr[0..i-1], that are 
-				greater than key, to one position ahead 
-				of their current position */
 			while (j >= 0 && keyLines[j].startPointX > key) 
 			{ 
 				keyLines[j+1] = keyLines[j]; 
@@ -562,6 +565,7 @@ void sortKeyLines(vector<KeyLine> &keyLines){
 }
 
 
+/* Summary: helper function to ensure that startPointX is always the smaller value. */
 void switchStartAndEnd(KeyLine &kl){
 	if( kl.startPointX > kl.endPointX ){
 		float tempX = kl.startPointX;
@@ -574,6 +578,7 @@ void switchStartAndEnd(KeyLine &kl){
 }
 
 
+/* Summary: detectLCorners detect all the L corners using intersection points, and distance between extremes. */
 void detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines){
 	int linesSize = lines.size();
 	for( int i = 0; i < linesSize - 1; i++ ){
@@ -590,6 +595,7 @@ void detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines){
 }
 
 
+/* Summary: isLCorner simply returns true or false boolean value by checking if kl1 and kl2 are L corner relation. */
 bool isLCorner(KeyLine &kl1, KeyLine &kl2){
 	bool isLCorner = false;
 	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
@@ -601,16 +607,18 @@ bool isLCorner(KeyLine &kl1, KeyLine &kl2){
 		// if two lines intersect when the angle > 50, then we check each extremes of the line 
 		// to see if the lines are intersecting as T.
 		if( doIntersect(kl1StartPt, kl1EndPt, kl2StartPt, kl2EndPt) ){
-			float distance = calcDistance(&kl1, &kl2);
-			if( distance <= 25.0f ){
+			float distance = calcDistance(&kl1, &kl2); 
+			if( distance <= 25.0f )
 				isLCorner = true;
-			}
 		}
 	}
 	return isLCorner;
 }
 
 
+/* Summary: detectCircleTCorner detects the centre line T corner. The idea is that if there no L corner present 
+on the field other, then we consider the T corner as centire line T corner. (can be updated using robot's position in 
+the future.) */
 void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines){
 	int mergedLinesSize = mergedLines.size();
 	for( int i = 0; i < mergedLinesSize-1; i++ ){
@@ -618,28 +626,27 @@ void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLi
 		for( int j = i + 1; j < mergedLinesSize; j++ ){
 			KeyLine toCompare = mergedLines[j];
 			if( isTCorner( mainLine, toCompare ) ){
-				KeyLine tCornerLine;
-				if( mainLine.startPointX < toCompare.startPointX && mainLine.endPointX > toCompare.startPointX){
-					tCornerLine = mainLine;
-				} else {
-					tCornerLine = toCompare;
-				}
-				bool isCirCleLineCorner = true;
-				for( int k = 0; k < mergedLinesSize; k++ ){
-					if( isLCorner(tCornerLine, mergedLines[k])) {
+				if( isTCorner( mainLine, toCompare ) ){
+					KeyLine tCornerLine = checkTIntersection(mainLine, toCompare, getIntersectionPoint( mainLine, toCompare ));
+
+					bool isCirCleLineCorner = true;
+					vector<KeyLine> LCorners;
+					detectLCorners(mergedLines, LCorners);
+					cout << LCorners.size() << endl;
+					if( LCorners.size() >= 1 ){
 						isCirCleLineCorner = false;
-						break;
 					}
+					if( isCirCleLineCorner )
+						cornerLines.push_back(tCornerLine);
+					break;
 				}
-				if( isCirCleLineCorner )
-					cornerLines.push_back(tCornerLine);
-				break;
 			}
 		}
 	}
 }
 
 
+/* Summary: checkTIntersection simply checks if there exists a L corner that is connected to the goal line T corner */
 KeyLine checkTIntersection(KeyLine kl1, KeyLine kl2, Point intersectionPoint){
 	float kl1StartPtDist = sqrt( pow( kl1.startPointX - intersectionPoint.x, 2 ) + pow(kl1.startPointY - intersectionPoint.y, 2));
 	float kl1EndPtDist = sqrt( pow( kl1.endPointX - intersectionPoint.x, 2 ) + pow(kl1.endPointY - intersectionPoint.y, 2));
@@ -651,6 +658,7 @@ KeyLine checkTIntersection(KeyLine kl1, KeyLine kl2, Point intersectionPoint){
 }
 
 
+/* detectTCorners: detects T corners on the field by looking at the distance between extremes and intersection point as well as the angle */
 void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines){
 	int mergedLinesSize = mergedLines.size();
 	for( int i = 0; i < mergedLinesSize-1; i++ ){
@@ -672,6 +680,7 @@ void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, 
 }
 
 
+/* Summary: isTCorner simply returns true if the two lines are T corner related, false otherwise. */ 
 bool isTCorner(KeyLine &kl1, KeyLine &kl2){
 	bool isTCorner = false;
 	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
@@ -727,33 +736,34 @@ bool onSegment(Point p, Point q, Point r)
 // and 'p2q2' intersect. 
 bool doIntersect(Point p1, Point q1, Point p2, Point q2) 
 { 
+	float lineExtensionLength = 30;
 	if( p1.x < q1.x ) {
-		p1.x = p1.x - 10;
-		q1.x = q1.x + 10;
+		p1.x = p1.x - lineExtensionLength;
+		q1.x = q1.x + lineExtensionLength;
 	} else {
-		p1.x = p1.x + 10;
-		q1.x = q1.x - 10;
+		p1.x = p1.x + lineExtensionLength;
+		q1.x = q1.x - lineExtensionLength;
 	}
 	if( p1.y < q1.y ) {
-		p1.y = p1.y - 10;
-		q1.y = q1.y + 10;
+		p1.y = p1.y - lineExtensionLength;
+		q1.y = q1.y + lineExtensionLength;
 	} else {
-		p1.y = p1.y + 10;
-		q1.y = q1.y - 10;
+		p1.y = p1.y + lineExtensionLength;
+		q1.y = q1.y - lineExtensionLength;
 	}
 	if( p2.x < q2.x ) {
-		p2.x = p2.x - 10;
-		q2.x = q2.x + 10;
+		p2.x = p2.x - lineExtensionLength;
+		q2.x = q2.x + lineExtensionLength;
 	} else {
-		p2.x = p2.x + 10;
-		q2.x = q2.x - 10;
+		p2.x = p2.x + lineExtensionLength;
+		q2.x = q2.x - lineExtensionLength;
 	}
 	if( p2.y < q2.y ) {
-		p2.y = p2.y - 10;
-		q2.y = q2.y + 10;
+		p2.y = p2.y - lineExtensionLength;
+		q2.y = q2.y + lineExtensionLength;
 	} else {
-		p2.y = p2.y + 10;
-		q2.y = q2.y - 10;
+		p2.y = p2.y + lineExtensionLength;
+		q2.y = q2.y - lineExtensionLength;
 	}
     // Find the four orientations needed for general and 
     // special cases 
@@ -783,6 +793,8 @@ bool doIntersect(Point p1, Point q1, Point p2, Point q2)
 } 
 
 
+/* Summary: getIntersectionPoint receives two KeyLines and finds the intersection point of these two lines. 
+If none, it returns Point(-1, -1). */
 Point getIntersectionPoint(KeyLine &kl1, KeyLine &kl2 ){
     float dx, dy;
     dx = kl1.endPointX - kl1.startPointX;
