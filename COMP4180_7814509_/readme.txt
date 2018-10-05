@@ -1,5 +1,5 @@
 COMP 4180, Assignment 1
-    Kyle Ahn, 
+    Kyle Ahn, 7794966
     Goutham Dhannapuneni, 7814509
 
 
@@ -42,4 +42,19 @@ NOTES:
 
         Output window
             - This window will show the final result with the ball and the lines drawn.
+
+
+--------------------------------------------
+Possible bugs on LSD
+--------------------------------------------
+- Although LSD works quite well, there seems to be a few bugs on merging colinear lines depending on the orientation of the camera. If the position of the camera is too low, then it sometimes merges wrong lines. However, this problem will be fixed by assignment 2 taking robot's position into consideration.
+
+- Unfortunately, centre circle detection was not able to be completed.
+
+------------------------------------------
+Contribution
+------------------------------------------
+Kyle Ahn
+
+ I have mainly worked on LSD part of the assignment. I have used LineSegmentDetector class that is provided by opencv library to extract the lines into vector<Vec4f>. Later, I have converted these Vec4f into KeyLine just to make it clear that vec4f represents line segment. The detailed description of each function is included in the source code. All the codes in vision.cpp is written by Kyle and Goutham.
 
