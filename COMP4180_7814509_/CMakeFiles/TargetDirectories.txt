@@ -1,0 +1,3 @@
+/home/goutham/A.I.-Robotics/sample/CMakeFiles/rebuild_cache.dir
+/home/goutham/A.I.-Robotics/sample/CMakeFiles/vision.dir
+/home/goutham/A.I.-Robotics/sample/CMakeFiles/edit_cache.dir

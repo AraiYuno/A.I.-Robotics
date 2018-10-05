@@ -11,21 +11,22 @@ using namespace cv::line_descriptor;
 
 Mat bgr_image, original;
 
-int ball_h_Low = 0; int ball_h_High = 18; int ball_s_Low = 101; int ball_s_High = 255;
-int ball_v_Low = 160; int ball_v_High = 255;
+int ball_h_Low = 0; int ball_h_High = 11; int ball_s_Low = 140; int ball_s_High = 255;
+int ball_v_Low = 163; int ball_v_High = 255;
 
-int field_h_Low = 55; int field_h_High = 95; int field_s_Low = 149; int field_s_High = 189;
-int field_v_Low = 60; int field_v_High = 100;
+int field_h_Low = 60; int field_h_High = 105; int field_s_Low = 75; int field_s_High = 189;
+int field_v_Low = 70; int field_v_High = 200;
 
-int line_h_Low = 177; int line_h_High = 255; int line_s_Low = 182; int line_s_High = 255;
+int line_h_Low = 193; int line_h_High = 255; int line_s_Low = 182; int line_s_High = 255;
 int line_v_Low = 157; int line_v_High = 255;
 
 RNG rng(12345);
 
+
+/* Helper functions */
+
 void updateCanny_Low(int, void* ){}
-
 void updateCanny_High(int, void* ){}
-
 
 Point3i trackBall(Mat &img);
 void extractField(Mat &img, Mat &field);
@@ -35,7 +36,6 @@ void drawField(Mat &img);
 void cleanUpLines( vector<KeyLine> &keyLines, vector<KeyLine> &mergedLines);
 void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines);
 
-/* Helper functions */
 float calcDistance(KeyLine *kl1, KeyLine *kl2);
 KeyLine checkTIntersection(KeyLine kl1, KeyLine kl2, Point intersectionPoint);
 float calcAngle(KeyLine &kl);
@@ -65,59 +65,85 @@ int main( int argc, char** argv )
 	
 
 	int top, left, right, bottom;
-	VideoCapture cap(0); 
+	
+	//changr the parameter to 0 if using induilt camera or 1 for external camera
+	VideoCapture cap(1); 
 
     if(!cap.isOpened())  // check if the camera starts 
          return -1;
 	
 	while (1) {
+
+		//read the frame and store it in cameraFeed
 		cap.read(cameraFeed);
 
+		//bgr_blur for storing the blur image and hsv_image for storing the hsc image
 		Mat bgr_blur, hsv_image;
-		bgr_image = imread("field6.jpg", CV_LOAD_IMAGE_COLOR);
-		
-		//bgr_image = cameraFeed.clone();
+
+		//bgr_image is a global image
+		bgr_image = cameraFeed.clone();
+
+		//resizing the image to fit in out laptop screen ;)
 		resize(bgr_image, bgr_image, Size(300,300), 0,0,1);
+
+		//original is a global image, which has the camerafeed as it is i.e no changes made at this to the image
 		original = bgr_image.clone();
 
 		medianBlur(bgr_image, bgr_blur, 5);
 		cvtColor(bgr_blur, bgr_image, cv::COLOR_BGR2HSV);
 
+
+		//clickable images for getting the hsv values of the field and ball
 		imshow("Field Finder", bgr_image);
 		setMouseCallback("Field Finder",fieldHandler, 0 );
 		imshow("Ball Finder", bgr_image);
 		setMouseCallback("Ball Finder", ballHandler, 0 );
 		
-	
+		//get the ball location and the size of the ball
+		//x, y is the coordinates and z is the radius
+		// if there is no ball x = y = -1
 		Point3i ball = trackBall(bgr_image);
 
+		//if there is a ball draw the circle
 		if(ball.x>0)
-			circle(bgr_image, Point(ball.x, ball.y), ball.z, Scalar(255,0,0), 2);
+			circle(original, Point(ball.x, ball.y), ball.z, Scalar(255,0,0), 2);
 
 		Mat field;
+
+		//extract the field and store the field in the variable field
 		extractField(bgr_image, field);
-		drawField(field);
 		imshow("Field Control",field);
+
+		//draw the lines
+		drawField(field);
+		
 		waitKey(30);
 	}
 return 0;
 }
 
+/*
+	fieldHandler
+		-get the hsv value of the pixel
 
+		-when clicked on the field finder window this function is evoked
+		-get the hsv value and assign it the global values of the field hsv values 
+*/
 void fieldHandler(int event, int x, int y, int flags, void* param) {
 	if(event == CV_EVENT_LBUTTONDOWN){
-		Vec3b intensity = original.at<Vec3b>(y, x);
+		Vec3b intensity = bgr_image.at<Vec3b>(y, x);
 
+		cout << intensity << endl;
 
 		if((int)intensity[0] -20 < 0)
 			field_h_Low = 0;
 		else
-			field_h_Low = (int)intensity[0] -30;
+			field_h_Low = (int)intensity[0] -20;
 		
-		if((int)intensity[0] +30 > 255)
-			field_h_Low = 255;
+		if((int)intensity[0] +20 > 255)
+			field_h_High = 255;
 		else
-			field_h_Low = (int)intensity[0] +30;
+			field_h_High = (int)intensity[0] +20;
 
 		if((int)intensity[1] -30 < 0)
 			field_s_Low = 0;
@@ -125,9 +151,9 @@ void fieldHandler(int event, int x, int y, int flags, void* param) {
 			field_s_Low = (int)intensity[1] -30;
 		
 		if((int)intensity[1] +30 > 255)
-			field_s_Low = 255;
+			field_s_High = 255;
 		else
-			field_s_Low = (int)intensity[1] +30;					
+			field_s_High = (int)intensity[1] +30;					
 
 		if((int)intensity[2] -30 < 0)
 			field_v_Low = 0;
@@ -135,25 +161,33 @@ void fieldHandler(int event, int x, int y, int flags, void* param) {
 			field_v_Low = (int)intensity[2] -30;
 		
 		if((int)intensity[2] +30 > 255)
-			field_v_Low = 255;
+			field_v_High = 255;
 		else
-			field_v_Low = (int)intensity[2] +30;
+			field_v_High = (int)intensity[2] +30;
 	}
 }
 
+
+/*
+	ballHandler
+		-get the hsv value of the pixel
+
+		-when clicked on the ball finder window this function is evoked
+		-get the hsv value and assign it the global values of the ball hsv values 
+*/
 void ballHandler(int event, int x, int y, int flags, void* param) {
 	if(event == CV_EVENT_LBUTTONDOWN){
 		Vec3b intensity = bgr_image.at<Vec3b>(y, x);
-
-		if((int)intensity[0] -20 < 0)
+		cout << intensity << " " << x << " " << y <<endl;
+		if((int)intensity[0] -10 < 0)
 			ball_h_Low = 0;
 		else
-			ball_h_Low = (int)intensity[0] -30;
+			ball_h_Low = (int)intensity[0] -10;
 		
-		if((int)intensity[0] +30 > 255)
-			ball_h_Low = 255;
+		if((int)intensity[0] +10 > 255)
+			ball_h_High = 255;
 		else
-			ball_h_Low = (int)intensity[0] +30;
+			ball_h_High = (int)intensity[0] +10;
 
 		if((int)intensity[1] -30 < 0)
 			ball_s_Low = 0;
@@ -161,9 +195,9 @@ void ballHandler(int event, int x, int y, int flags, void* param) {
 			ball_s_Low = (int)intensity[1] -30;
 		
 		if((int)intensity[1] +30 > 255)
-			ball_s_Low = 255;
+			ball_s_High = 255;
 		else
-			ball_s_Low = (int)intensity[1] +30;					
+			ball_s_High = (int)intensity[1] +30;					
 
 		if((int)intensity[2] -30 < 0)
 			ball_v_Low = 0;
@@ -171,52 +205,24 @@ void ballHandler(int event, int x, int y, int flags, void* param) {
 			ball_v_Low = (int)intensity[2] -30;
 		
 		if((int)intensity[2] +30 > 255)
-			ball_v_Low = 255;
+			ball_v_High = 255;
 		else
-			ball_v_Low = (int)intensity[2] +30;
+			ball_v_High = (int)intensity[2] +30;
+
+		cout << ball_h_Low << " " << ball_s_Low << " " << ball_v_Low<< endl;
 	}
 }
 
-void lineHandler(int event, int x, int y, int flags, void* param) {
-	if(event == CV_EVENT_LBUTTONDOWN){
-		Vec3b intensity = bgr_image.at<Vec3b>(y, x);
+/*
+	extractField
+		-extract the field and return it
 
-		if((int)intensity[0] -20 < 0)
-			line_h_Low = 0;
-		else
-			line_h_Low = (int)intensity[0] -30;
-		
-		if((int)intensity[0] +30 > 255)
-			line_h_Low = 255;
-		else
-			line_h_Low = (int)intensity[0] +30;
-
-		if((int)intensity[1] -30 < 0)
-			line_s_Low = 0;
-		else
-			line_s_Low = (int)intensity[1] -30;
-		
-		if((int)intensity[1] +30 > 255)
-			line_s_Low = 255;
-		else
-			line_s_Low = (int)intensity[1] +30;					
-
-		if((int)intensity[2] -30 < 0)
-			line_v_Low = 0;
-		else
-			line_v_Low = (int)intensity[2] -30;
-		
-		if((int)intensity[2] +30 > 255)
-			line_v_Low = 255;
-		else
-			line_v_Low = (int)intensity[2] +30;
-
-	}
-}
-
+		- img is the hsv image
+		- field is for returning the extracted fields
+*/
 void extractField(Mat &img, Mat &field)
 {
-	/// GUI with trackbar
+	/// GUI with trackbar for tuning the field 
 	namedWindow( "Field Control", CV_WINDOW_AUTOSIZE );
 	createTrackbar( "h (Low):", "Field Control", &field_h_Low, 255, updateCanny_Low);
 	createTrackbar( "h (High):", "Field Control", &field_h_High, 255, updateCanny_High);
@@ -229,7 +235,7 @@ void extractField(Mat &img, Mat &field)
 
 	inRange(img, cv::Scalar(field_h_Low, field_s_Low, field_v_Low), cv::Scalar(field_h_High, field_s_High, field_v_High), hsv_threshold);
 	
-	Mat element = getStructuringElement(MORPH_RECT,Size(50,50), Point(1,1));
+	Mat element = getStructuringElement(MORPH_RECT,Size(50,50), Point(-1,-1));
 	morphologyEx(hsv_threshold, hsv_threshold, MORPH_CLOSE , element);
 
 	Mat canny;
@@ -240,6 +246,17 @@ void extractField(Mat &img, Mat &field)
 
 	field = out;
 }
+
+/*
+	trackBall
+		-extract the field and return it
+
+		- img is the hsv image
+
+		returns the position of the ball and the radius
+		x, y is the position and z is the radius
+		x, y is -1 if there is no ball found
+*/
 
 Point3i trackBall(Mat &img)
 {
@@ -253,17 +270,18 @@ Point3i trackBall(Mat &img)
 	createTrackbar( "v (High):", "Ball Control", &ball_v_High, 255, updateCanny_High);
 
 	Mat hsv_threshold;
+
+	//extract the color using the hsv values
 	inRange(img, cv::Scalar(ball_h_Low, ball_s_Low, ball_v_Low), cv::Scalar(ball_h_High, ball_s_High, ball_v_High), hsv_threshold);
 	
-//		dilate(hsv_threshold, hsv_threshold, Mat(), Point(-1, -1), 4);
-//	erode(hsv_threshold, hsv_threshold, Mat(), Point(-1, -1), 4);
-	
-	Mat element = getStructuringElement(MORPH_ELLIPSE,Size(30,30));
+
+	//morphological operation to reduce noice
+	Mat element = getStructuringElement(MORPH_RECT,Size(20,20));
 	morphologyEx(hsv_threshold, hsv_threshold, MORPH_CLOSE , element);
 	imshow("Ball Control",hsv_threshold);
 	Mat canny;
 
-	Canny(hsv_threshold,canny, 100, 255, 3);
+	Canny(hsv_threshold,canny, 50, 255, 3);
 
 	vector<cv::Vec3f> circles;
 	size_t pos = -1;
@@ -271,6 +289,7 @@ Point3i trackBall(Mat &img)
 	
 	vector<vector<Point> > contours;
 	
+	//get all the contours in the image
 	findContours(canny, contours, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
 	
 	vector<vector<cv::Point> > balls;
@@ -298,8 +317,12 @@ Point3i trackBall(Mat &img)
 	for (int i = 0; i< balls.size(); i++)
 	{
 		approxPolyDP(Mat(balls[i]), cir[i], 3, true);
-		minEnclosingCircle(cir[i], center[i], radius[i]);	
-		if ((cir[i]).size() > 4 && radius[i] > maxRadius)
+		
+		//get the center and the radius of the circle
+		minEnclosingCircle(cir[i], center[i], radius[i]);
+		
+		//get the circle with max radius	
+		if ((cir[i]).size() > 3 && radius[i] > maxRadius)
 		{
 			maxRadius = radius[i];
 			pos = i;
@@ -308,10 +331,11 @@ Point3i trackBall(Mat &img)
 
 	if (pos != -1)
 	{
-		//circle(bgr_image, cent, rad, cv::Scalar(0, 255, 0), 2);
+		//store the results;
 		result = Point3i((int)(center[pos].x), (int)round(center[pos].y),(int) (radius[pos]));
 	}
 	else{
+		//if no circles found x, y, z = -1
 		result = Point3i(-1,-1,-1);
 	}	
 
@@ -334,13 +358,13 @@ void drawField(Mat &hsv_img){
 
 	medianBlur(hsv_img, hsv_img, 5);
 	Mat cann, img;
-	inRange(hsv_img, cv::Scalar(line_h_Low, line_s_Low, line_v_Low), cv::Scalar(line_h_High, line_s_High, line_v_High), cann);
-	bitwise_not ( cann, img );
+	inRange(hsv_img, cv::Scalar(line_h_Low, line_s_Low, line_v_Low), cv::Scalar(line_h_High, line_s_High, line_v_High), img);
+	//bitwise_not ( cann, img );
 	imshow("Line Control", img);
 	resize(img, img, Size(300,300),0,0,CV_INTER_LINEAR);
 	Mat mask = Mat::ones( img.size(), CV_8UC1 );
 
-	Ptr<LineSegmentDetector> ls = createLineSegmentDetector(LSD_REFINE_STD);
+	Ptr<LineSegmentDetector> ls = createLineSegmentDetector(LSD_REFINE_NONE);
 	    // Detect the lines
 	vector<Vec4f> lines_std;
 	std::vector<KeyLine> keyLines;
@@ -360,7 +384,7 @@ void drawField(Mat &hsv_img){
 
 	// sort the lines by x in ascending order using startPointX
 	sortKeyLines(keyLines);
-	cv::Mat output = img.clone();
+	cv::Mat output = original.clone();
 	if( output.channels() == 1 )
 		cvtColor( output, output, COLOR_GRAY2BGR );
 
@@ -371,7 +395,8 @@ void drawField(Mat &hsv_img){
 	drawLines(output, mergedLines, 2);
 	drawLines(output, tCornerLines, 3);
 	drawLines(output, circleLineCorners, 0);
-	imshow("LSD", output);
+	
+	imshow("Output", output);
 }
 
 

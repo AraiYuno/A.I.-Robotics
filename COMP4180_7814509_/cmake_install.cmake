@@ -1,4 +1,4 @@
-# Install script for directory: /home/yuno/Desktop/School/COMP 4180/Assignments/sample
+# Install script for directory: /home/goutham/A.I.-Robotics/sample
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/yuno/Desktop/School/COMP 4180/Assignments/sample/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/goutham/A.I.-Robotics/sample/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

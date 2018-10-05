@@ -48,10 +48,10 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = "/home/yuno/Desktop/School/COMP 4180/Assignments/sample"
+CMAKE_SOURCE_DIR = /home/goutham/A.I.-Robotics/sample
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = "/home/yuno/Desktop/School/COMP 4180/Assignments/sample"
+CMAKE_BINARY_DIR = /home/goutham/A.I.-Robotics/sample
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -80,9 +80,9 @@ edit_cache/fast: edit_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start "/home/yuno/Desktop/School/COMP 4180/Assignments/sample/CMakeFiles" "/home/yuno/Desktop/School/COMP 4180/Assignments/sample/CMakeFiles/progress.marks"
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/goutham/A.I.-Robotics/sample/CMakeFiles /home/goutham/A.I.-Robotics/sample/CMakeFiles/progress.marks
 	$(MAKE) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start "/home/yuno/Desktop/School/COMP 4180/Assignments/sample/CMakeFiles" 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/goutham/A.I.-Robotics/sample/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -111,44 +111,44 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named sample
+# Target rules for targets named vision
 
 # Build rule for target.
-sample: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 sample
-.PHONY : sample
+vision: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 vision
+.PHONY : vision
 
 # fast build rule for target.
-sample/fast:
-	$(MAKE) -f CMakeFiles/sample.dir/build.make CMakeFiles/sample.dir/build
-.PHONY : sample/fast
+vision/fast:
+	$(MAKE) -f CMakeFiles/vision.dir/build.make CMakeFiles/vision.dir/build
+.PHONY : vision/fast
 
-sample.o: sample.cpp.o
+vision.o: vision.cpp.o
 
-.PHONY : sample.o
+.PHONY : vision.o
 
 # target to build an object file
-sample.cpp.o:
-	$(MAKE) -f CMakeFiles/sample.dir/build.make CMakeFiles/sample.dir/sample.cpp.o
-.PHONY : sample.cpp.o
+vision.cpp.o:
+	$(MAKE) -f CMakeFiles/vision.dir/build.make CMakeFiles/vision.dir/vision.cpp.o
+.PHONY : vision.cpp.o
 
-sample.i: sample.cpp.i
+vision.i: vision.cpp.i
 
-.PHONY : sample.i
+.PHONY : vision.i
 
 # target to preprocess a source file
-sample.cpp.i:
-	$(MAKE) -f CMakeFiles/sample.dir/build.make CMakeFiles/sample.dir/sample.cpp.i
-.PHONY : sample.cpp.i
+vision.cpp.i:
+	$(MAKE) -f CMakeFiles/vision.dir/build.make CMakeFiles/vision.dir/vision.cpp.i
+.PHONY : vision.cpp.i
 
-sample.s: sample.cpp.s
+vision.s: vision.cpp.s
 
-.PHONY : sample.s
+.PHONY : vision.s
 
 # target to generate assembly for a file
-sample.cpp.s:
-	$(MAKE) -f CMakeFiles/sample.dir/build.make CMakeFiles/sample.dir/sample.cpp.s
-.PHONY : sample.cpp.s
+vision.cpp.s:
+	$(MAKE) -f CMakeFiles/vision.dir/build.make CMakeFiles/vision.dir/vision.cpp.s
+.PHONY : vision.cpp.s
 
 # Help Target
 help:
@@ -157,11 +157,11 @@ help:
 	@echo "... clean"
 	@echo "... depend"
 	@echo "... rebuild_cache"
-	@echo "... sample"
+	@echo "... vision"
 	@echo "... edit_cache"
-	@echo "... sample.o"
-	@echo "... sample.i"
-	@echo "... sample.s"
+	@echo "... vision.o"
+	@echo "... vision.i"
+	@echo "... vision.s"
 .PHONY : help
 
 

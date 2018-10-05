@@ -1,3 +1,0 @@
-/home/yuno/Desktop/School/COMP 4180/Assignments/sample/CMakeFiles/rebuild_cache.dir
-/home/yuno/Desktop/School/COMP 4180/Assignments/sample/CMakeFiles/sample.dir
-/home/yuno/Desktop/School/COMP 4180/Assignments/sample/CMakeFiles/edit_cache.dir

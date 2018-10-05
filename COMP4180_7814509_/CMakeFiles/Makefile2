@@ -54,45 +54,45 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = "/home/yuno/Desktop/School/COMP 4180/Assignments/sample"
+CMAKE_SOURCE_DIR = /home/goutham/A.I.-Robotics/sample
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = "/home/yuno/Desktop/School/COMP 4180/Assignments/sample"
+CMAKE_BINARY_DIR = /home/goutham/A.I.-Robotics/sample
 
 #=============================================================================
-# Target rules for target CMakeFiles/sample.dir
+# Target rules for target CMakeFiles/vision.dir
 
 # All Build rule for target.
-CMakeFiles/sample.dir/all:
-	$(MAKE) -f CMakeFiles/sample.dir/build.make CMakeFiles/sample.dir/depend
-	$(MAKE) -f CMakeFiles/sample.dir/build.make CMakeFiles/sample.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir="/home/yuno/Desktop/School/COMP 4180/Assignments/sample/CMakeFiles" --progress-num=1,2 "Built target sample"
-.PHONY : CMakeFiles/sample.dir/all
+CMakeFiles/vision.dir/all:
+	$(MAKE) -f CMakeFiles/vision.dir/build.make CMakeFiles/vision.dir/depend
+	$(MAKE) -f CMakeFiles/vision.dir/build.make CMakeFiles/vision.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/goutham/A.I.-Robotics/sample/CMakeFiles --progress-num=1,2 "Built target vision"
+.PHONY : CMakeFiles/vision.dir/all
 
 # Include target in all.
-all: CMakeFiles/sample.dir/all
+all: CMakeFiles/vision.dir/all
 
 .PHONY : all
 
 # Build rule for subdir invocation for target.
-CMakeFiles/sample.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start "/home/yuno/Desktop/School/COMP 4180/Assignments/sample/CMakeFiles" 2
-	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/sample.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start "/home/yuno/Desktop/School/COMP 4180/Assignments/sample/CMakeFiles" 0
-.PHONY : CMakeFiles/sample.dir/rule
+CMakeFiles/vision.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/goutham/A.I.-Robotics/sample/CMakeFiles 2
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/vision.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/goutham/A.I.-Robotics/sample/CMakeFiles 0
+.PHONY : CMakeFiles/vision.dir/rule
 
 # Convenience name for target.
-sample: CMakeFiles/sample.dir/rule
+vision: CMakeFiles/vision.dir/rule
 
-.PHONY : sample
-
-# clean rule for target.
-CMakeFiles/sample.dir/clean:
-	$(MAKE) -f CMakeFiles/sample.dir/build.make CMakeFiles/sample.dir/clean
-.PHONY : CMakeFiles/sample.dir/clean
+.PHONY : vision
 
 # clean rule for target.
-clean: CMakeFiles/sample.dir/clean
+CMakeFiles/vision.dir/clean:
+	$(MAKE) -f CMakeFiles/vision.dir/build.make CMakeFiles/vision.dir/clean
+.PHONY : CMakeFiles/vision.dir/clean
+
+# clean rule for target.
+clean: CMakeFiles/vision.dir/clean
 
 .PHONY : clean
 
