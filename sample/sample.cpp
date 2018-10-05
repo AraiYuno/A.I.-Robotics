@@ -36,8 +36,8 @@ void cleanUpLines( vector<KeyLine> &keyLines, vector<KeyLine> &mergedLines);
 void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines);
 
 /* Helper functions */
-void connectEndPoints(vector<KeyLine> &keyLines);
 float calcDistance(KeyLine *kl1, KeyLine *kl2);
+KeyLine checkTIntersection(KeyLine kl1, KeyLine kl2, Point intersectionPoint);
 float calcAngle(KeyLine &kl);
 bool areSameLines(KeyLine &kl1, KeyLine &kl2);
 void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour);
@@ -54,7 +54,7 @@ bool isTCorner(KeyLine &kl1, KeyLine &kl2);
 bool doIntersect(Point p1, Point q1, Point p2, Point q2);
 int orientation(Point p, Point q, Point r);
 bool onSegment(Point p, Point q, Point r);
-Point getIntersectionPoint(Point p1, Point q1, Point p2, Point q2);
+Point getIntersectionPoint(KeyLine &kl1, KeyLine &kl2 );
 
 
 
@@ -640,6 +640,17 @@ void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLi
 }
 
 
+KeyLine checkTIntersection(KeyLine kl1, KeyLine kl2, Point intersectionPoint){
+	float kl1StartPtDist = sqrt( pow( kl1.startPointX - intersectionPoint.x, 2 ) + pow(kl1.startPointY - intersectionPoint.y, 2));
+	float kl1EndPtDist = sqrt( pow( kl1.endPointX - intersectionPoint.x, 2 ) + pow(kl1.endPointY - intersectionPoint.y, 2));
+	float kl2StartPtDist = sqrt( pow( kl2.startPointX - intersectionPoint.x, 2 ) + pow(kl2.startPointY - intersectionPoint.y, 2));
+	float kl2EndPtDist = sqrt( pow( kl2.endPointX - intersectionPoint.x, 2 ) + pow(kl2.endPointY - intersectionPoint.y, 2));
+	float kl1Dist = (kl1StartPtDist < kl1EndPtDist) ? kl1StartPtDist : kl1EndPtDist;
+	float kl2Dist = (kl2StartPtDist < kl2EndPtDist) ? kl2StartPtDist : kl2EndPtDist;
+	return (kl1Dist < kl2Dist) ? kl1 : kl2;
+}
+
+
 void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines){
 	int mergedLinesSize = mergedLines.size();
 	for( int i = 0; i < mergedLinesSize-1; i++ ){
@@ -647,14 +658,9 @@ void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, 
 		for( int j = i + 1; j < mergedLinesSize; j++ ){
 			KeyLine toCompare = mergedLines[j];
 			if( isTCorner( mainLine, toCompare ) ){
-				KeyLine tCornerLine;
-				if( mainLine.startPointX < toCompare.startPointX && mainLine.endPointX > toCompare.startPointX){
-					cornerLines.push_back(mainLine);
-					tCornerLine = mainLine;
-				} else {
-					cornerLines.push_back(toCompare);
-					tCornerLine = toCompare;
-				}
+				KeyLine tCornerLine = checkTIntersection(mainLine, toCompare, getIntersectionPoint( mainLine, toCompare ));
+				cornerLines.push_back(tCornerLine);
+
 				for( int k = 0; k < mergedLinesSize; k++ ){
 					if( isLCorner(tCornerLine, mergedLines[k])) {
 						cornerLines.push_back(mergedLines[k]);
@@ -775,3 +781,28 @@ bool doIntersect(Point p1, Point q1, Point p2, Point q2)
   
     return false; // Doesn't fall in any of the above cases 
 } 
+
+
+Point getIntersectionPoint(KeyLine &kl1, KeyLine &kl2 ){
+    float dx, dy;
+    dx = kl1.endPointX - kl1.startPointX;
+    dy = kl1.endPointY - kl1.startPointY;
+	float m1 = dy / dx;
+    // y = mx + c
+    // intercept c = y - mx
+    float c1 = kl1.startPointY - m1 * kl1.startPointX; // which is same as y2 - slope * x2
+    dx = kl2.endPointX - kl2.startPointX;
+    dy = kl2.endPointY - kl2.startPointY;
+    float m2 = dy / dx;
+    // y = mx + c
+    // intercept c = y - mx
+    float c2 = kl2.startPointY - m2 * kl2.startPointX; // which is same as y2 - slope * x2
+
+    if( (m1 - m2) == 0)
+        return Point(-1, -1);
+    else {
+        float intersection_X = (c2 - c1) / (m1 - m2);
+        float intersection_Y = m1 * intersection_X + c1;
+		return Point(intersection_X, intersection_Y);
+    }
+}
