@@ -43,10 +43,8 @@ bool areSameLines(KeyLine &kl1, KeyLine &kl2);
 void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour);
 void sortKeyLines(vector<KeyLine> &keyLines);
 void mergeLines(KeyLine &mainLine, KeyLine &kl);
-int getNearByType(KeyLine *kl1, KeyLine *kl2);
-bool areParallel(KeyLine &kl1, KeyLine &kl2);
-void mergeParalellLine(KeyLine &kl1, KeyLine &kl2);
-
+bool mergeParalellLine(KeyLine &kl1, KeyLine &kl2);
+void switchStartAndEnd(KeyLine &kl);
 
 /* Intersection */
 void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines);
@@ -76,7 +74,7 @@ int main( int argc, char** argv )
 		cap.read(cameraFeed);
 
 		Mat bgr_blur, hsv_image;
-		bgr_image = imread("field3.jpg", CV_LOAD_IMAGE_COLOR);
+		bgr_image = imread("field2.jpg", CV_LOAD_IMAGE_COLOR);
 		
 		//bgr_image = cameraFeed.clone();
 		resize(bgr_image, bgr_image, Size(300,300), 0,0,1);
@@ -372,7 +370,6 @@ void drawField(Mat &hsv_img){
 	drawLines(output, mergedLines, 2);
 	// detectLCorners( mergedLines, tCornerLCornerLines );
 	drawLines(output, tCornerLines, 0);
-	//cout << "!! " << endl;
 	imshow("LSD", output);
 }
 
@@ -389,32 +386,46 @@ void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 		int size = lines.size();
 		for( int i = 0; i < size; i++ ){
 			KeyLine line = lines[i];
-			if( true ){
-				if( !mainLineIsSelected ){
-					mainLine = line;
-					mainLineIsSelected = true;
+			if( !mainLineIsSelected ){
+				mainLine = line;
+				mainLineIsSelected = true;
+			} else {
+				switchStartAndEnd(mainLine);
+				// cout << "MainLine: " + std::to_string(mainLine.startPointX) + ", " +std::to_string(mainLine.startPointY) + " - " + std::to_string(mainLine.endPointX) +", " + std::to_string(mainLine.endPointY) << endl;
+				// cout << "Line: " + std::to_string(line.startPointX) + ", " +std::to_string(line.startPointY) + " - " + std::to_string(line.endPointX) +", " + std::to_string(line.endPointY) << endl;
+				if( areSameLines(mainLine, line) ){ // we compare the mainLine and kl to see if we need to merge.
+					mergeLines(mainLine, line);
 				} else {
-					if( areSameLines(mainLine, line) ){ // we compare the mainLine and kl to see if we need to merge.
-						mergeLines(mainLine, line);
-					} else {
-						tempLines.push_back(lines[i]);	
-					}
-				}
+					tempLines.push_back(lines[i]);	
+				}	
 			} 
 		}
-		// if( mainLine.lineLength > 35.0f )
-			mergedLines.push_back(mainLine);
+		mergedLines.push_back(mainLine);
 	} while(tempLines.size() > 1);
+
+
+
+	for( int i = 0; i < mergedLines.size(); i++ ){
+		switchStartAndEnd(mergedLines[i]);
+	}
 
 	vector<KeyLine> parallelLines;
 	int size = mergedLines.size();
-	for( int i = 0; i < size - 1; i++ ){
+	for( int i = 0; i < size; i++ ){
 		for( int j = i + 1; j < size; j++ ){
-			if( areParallel( mergedLines[i], mergedLines[j]) ){
-				mergeParalellLine( mergedLines[i], mergedLines[j]);
-				parallelLines.push_back(mergedLines[i]);
-			} 
+			if( mergeParalellLine( mergedLines[i], mergedLines[j]))
+				parallelLines.push_back(mergedLines[j]);
 		}
+	}
+	for( int i = 0; i < parallelLines.size(); i++ ){
+		float toCompareX = parallelLines[i].startPointX;
+		float toCompareY = parallelLines[i].startPointY;
+		for( int j = 0; j < mergedLines.size(); j++ ){
+			if( toCompareX == mergedLines[j].startPointX && toCompareY == mergedLines[j].startPointY ){
+				mergedLines.erase(mergedLines.begin() + j);
+				break;
+			}
+		}	
 	}
 }
 
@@ -424,10 +435,6 @@ void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour){
 		KeyLine kl = keyLines[i];
 		Point pt1 = Point( kl.startPointX, kl.startPointY );
 		Point pt2 = Point( kl.endPointX, kl.endPointY );
-		// int R = ( rand() % (int) ( 255 + 1 ) );
-		// int G = ( rand() % (int) ( 255 + 1 ) );
-		// int B = ( rand() % (int) ( 255 + 1 ) );
-		// line( output, pt1, pt2, Scalar( B, G, R ), 5 );
 
 		/* draw line */
 		if( colour == 0 ) // red T corners.
@@ -440,23 +447,35 @@ void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour){
 }
 
 
-void mergeParalellLine(KeyLine &kl1, KeyLine &kl2){
-	Point kl1MidPoint = Point( (kl1.startPointX + kl1.endPointX)/ 2, (kl1.startPointY + kl1.endPointY)/2 );
-	Point kl2MidPoint = Point( (kl2.startPointX + kl2.endPointX)/ 2, (kl2.startPointY + kl2.endPointY)/2 );
-	float distanceX = std::abs( kl2MidPoint.x - kl1MidPoint.x);
-	float distanceY = std::abs( kl2MidPoint.y - kl1MidPoint.y);
-	if( distanceX < distanceY ) {
-		// then the two lines are parallel vertically.
-		kl1.startPointX = (kl1.startPointX + kl2.startPointX)/2;
-		kl1.startPointY = (kl1.startPointY < kl2.startPointY) ? kl2.startPointY : kl1.startPointY;
-		kl1.endPointX = (kl1.endPointX + kl2.startPointX)/2;
-		kl1.endPointY = (kl1.endPointY > kl2.endPointY) ? kl1.endPointY : kl2.endPointY;
-	} else {
-		kl1.startPointY = (kl1.startPointY + kl2.startPointY)/2;
-		kl1.startPointX = (kl1.startPointX < kl2.startPointX) ? kl2.startPointX : kl1.startPointX;
-		kl1.endPointY = (kl1.endPointY + kl2.startPointY)/2;
-		kl1.endPointX = (kl1.endPointX > kl2.endPointX) ? kl1.endPointX : kl2.endPointX;
+bool mergeParalellLine(KeyLine &kl1, KeyLine &kl2){
+	bool areParallel = false;
+	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
+	float startToStartX = std::abs(kl1.startPointX - kl2.startPointX);
+	float endToStartX = std::abs(kl1.startPointX - kl2.endPointX);
+	float xDistance = (startToStartX <= endToStartX) ? startToStartX : endToStartX;
+	float startToStartY = std::abs(kl1.startPointY - kl2.startPointY);
+	float endToStartY = std::abs(kl1.startPointY - kl2.endPointY);
+	float yDistance = (startToStartY <= endToStartY) ? startToStartY : endToStartY;
+
+	// cout << "kl1: " + std::to_string(kl1.startPointX) + ", " +std::to_string(kl1.startPointY) + " - " + std::to_string(kl1.endPointX) +", " + std::to_string(kl1.endPointY) << endl;
+	// cout << "kl2: " + std::to_string(kl2.startPointX) + ", " +std::to_string(kl2.startPointY) + " - " + std::to_string(kl2.endPointX) +", " + std::to_string(kl2.endPointY) << endl;
+	// cout << "distance: " + std::to_string(calcDistance(&kl1, &kl2)) << endl;
+	// cout << "angleDifference: " + std::to_string(angleDifference) + ", kl1: " + std::to_string(calcAngle(kl1)) + ", kl2: " + std::to_string(calcAngle(kl2)) << endl;
+
+	if( angleDifference < 25.f ){
+		if( (xDistance <= 25.0f || yDistance <= 25.0f) && calcDistance(&kl1, &kl2) < 45.0f){
+			// cout << "BINGO " << endl;
+			areParallel = true;
+		}
 	}
+
+	if( areParallel ){
+		kl1.startPointX = (kl1.startPointX + kl2.startPointX)/2;
+		kl1.startPointY = (kl1.startPointY + kl2.startPointY)/2;
+		kl1.endPointX = (kl1.endPointX + kl2.endPointX)/2;
+		kl1.endPointY = (kl2.endPointY + kl2.endPointY)/2;
+	}
+	return areParallel;
 }
 
 
@@ -464,108 +483,23 @@ void mergeParalellLine(KeyLine &kl1, KeyLine &kl2){
 them to be the same lines to be merged. */
 bool areSameLines(KeyLine &kl1, KeyLine &kl2){
 	float distance = calcDistance(&kl1, &kl2);
-	float angleDifference = calcAngle(kl1) - calcAngle(kl2);
-	return (distance < 25.0f  && std::abs(angleDifference) < 20) ? true : false;
-}
-
-
-bool areParallel(KeyLine &kl1, KeyLine &kl2){
-	bool areParallel = false;
 	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
-	if( angleDifference < 20.f ){
-		if( calcDistance(&kl1, &kl2) < 80.0f ){
-			areParallel = true;
-		}
-	}
-	return areParallel;
+	return (distance < 25.f  && angleDifference < 25) ? true : false;
 }
 
 
 /* This function merges kl into mainLine. The idea is that mainLine's new startPoint will be the smallest x, and y, and the 
 endpoint will be the largest x and y.  */
 void mergeLines(KeyLine &mainLine, KeyLine &kl){
-		mainLine.endPointX = kl.endPointX;
-		mainLine.endPointY = kl.endPointY;
-}
-
-
-/* Checks if any keyLines are close to each other after merging step. Then, we just
-   simply extend the lines and connect one another. */
-void connectEndPoints(vector<KeyLine> &keyLines){
-	for( int i = 0; i < keyLines.size()-1; i++ ) {
-		KeyLine currLine = keyLines[i];
-		for( int j = i+1; j < keyLines.size(); j++ ){
-			KeyLine toCompare = keyLines[j];
-			int nearByType = getNearByType(&currLine, &toCompare); // 1. startToStart Point, 2. startToEndPoint, 3. endToStart Point, 4. endToEndPoint.
-			int distance = calcDistance(&currLine, &toCompare);
-			Point p1 = Point( currLine.startPointX, currLine.startPointY );
-			Point q1 = Point( currLine.endPointX, currLine.endPointY );
-			Point p2 = Point( toCompare.startPointX, toCompare.startPointX );
-			Point q2 = Point( toCompare.endPointX, toCompare.endPointY );
-			if( distance <= 50 ){
-				float tempCurrStartPointX = currLine.startPointX;
-				float tempCurrStartPointY = currLine.startPointY;
-				float tempCurrEndPointX = currLine.endPointX;
-				float tempCurrEndPointY = currLine.endPointY;
-				if( nearByType == 1 ){
-					keyLines[i].startPointX = toCompare.startPointX;
-					keyLines[i].startPointY = toCompare.startPointY;
-					keyLines[j].startPointX = tempCurrStartPointX;
-					keyLines[j].startPointY = tempCurrStartPointY;
-				}
-				else if( nearByType == 2 ){
-					currLine.startPointX = toCompare.endPointX;
-					currLine.startPointY = toCompare.endPointY;
-					toCompare.endPointX = tempCurrStartPointX;
-					toCompare.endPointY = tempCurrStartPointY;
-				}
-				else if( nearByType == 3 ){
-					currLine.endPointX = toCompare.startPointX;
-					currLine.endPointY = toCompare.startPointY;
-					toCompare.startPointX = tempCurrEndPointX;
-					toCompare.startPointY = tempCurrEndPointY;
-				}
-				else if( nearByType == 4 ){
-					currLine.endPointX = toCompare.endPointX;
-					currLine.endPointY = toCompare.endPointY;
-					toCompare.endPointX = tempCurrEndPointX;
-					toCompare.endPointY = tempCurrEndPointY;
-				}
-			}
-		}
-	}
-}
-
-
-int getNearByType(KeyLine *kl1, KeyLine *kl2){
-	Point kl1StartPt = Point( kl1->startPointX, kl1->startPointY );
-	Point kl1EndPt = Point( kl1->endPointX, kl1->endPointY );
-	Point kl2StartPt = Point( kl2->startPointX, kl2->startPointY );
-	Point kl2EndPt = Point( kl2->endPointX, kl2->endPointY );
-	float startToStartXDiff = kl1StartPt.x - kl2StartPt.x;
-	float startToEndXDiff = kl1StartPt.x - kl2EndPt.x;
-	float startToStartYDiff = kl1StartPt.y - kl2StartPt.y;
-	float startToEndYDiff = kl1StartPt.y - kl2EndPt.y;
-	float endToStartXDiff = kl1EndPt.x - kl2StartPt.x;
-	float endToEndXDiff = kl1EndPt.x - kl2EndPt.x;
-	float endToStartYDiff = kl1EndPt.y - kl2StartPt.y;
-	float endToEndYDiff = kl1EndPt.y - kl2EndPt.y;
-	
-	float startToStart = sqrt(startToStartXDiff*startToStartXDiff + startToStartYDiff*startToStartYDiff);
-	float startToEnd = sqrt(startToEndXDiff*startToEndXDiff + startToEndYDiff*startToEndYDiff);
-	float endToStart = sqrt(endToStartXDiff*endToStartXDiff + endToStartYDiff*endToStartYDiff);
-	float endToEnd = sqrt(endToEndXDiff*endToEndXDiff + endToEndYDiff*endToEndYDiff);
-
-	int startToStartEnd = (startToStart <= startToEnd) ? 1 : 2;
-	int endToStartEnd = (endToStart <= endToEnd ) ? 3 : 4;
-	return ( (startToStartEnd <= endToStartEnd ) ? startToStartEnd : endToStartEnd );
+	mainLine.endPointX = kl.endPointX;
+	mainLine.endPointY = kl.endPointY;
 }
 
 
 float calcDistance(KeyLine *kl1, KeyLine *kl2){
 	Point kl1StartPt = Point( kl1->startPointX, kl1->startPointY );
 	Point kl1EndPt = Point( kl1->endPointX, kl1->endPointY );
-	Point kl2StartPt = Point( kl2->startPointX, kl2->startPointY );
+	Point kl2StartPt = Point( kl2->startPointX, kl2->startPointY);
 	Point kl2EndPt = Point( kl2->endPointX, kl2->endPointY );
 
 	float startToStartXDiff = kl1StartPt.x - kl2StartPt.x;
@@ -589,8 +523,12 @@ float calcDistance(KeyLine *kl1, KeyLine *kl2){
 
 
 float calcAngle(KeyLine &kl){
-	float angle = atan2(kl.endPointY - kl.startPointY, kl.endPointX - kl.startPointX);
-	return angle * 180.0f / 3.141592f;
+	float angle;
+	angle = atan2(kl.startPointY, kl.startPointX)  - atan2(kl.endPointY, kl.endPointX);
+	angle = angle * 360.0f / (2*PI);
+	if( angle < 0 )
+		angle += 360;
+	return (angle > 180.0f) ? angle - 180.0f : angle;
 }
 
 
@@ -599,21 +537,39 @@ float calcAngle(KeyLine &kl){
 //   this function sorts the keyLines by X coordinate, then Y if two x's are the same.
 //=================================================================================
 void sortKeyLines(vector<KeyLine> &keyLines){
-	int maxIndex;
 	if( keyLines.size() > 1 ){
-		for( int i = 0; i < keyLines.size()-1; i++ ){
-			maxIndex = i;
-			for( int j = i + 1; j < keyLines.size(); j++ ) {
-				if( keyLines[j].startPointX > keyLines[maxIndex].startPointX){
-					maxIndex = j;
-				}
-			}
-			if( maxIndex != i ){
-				KeyLine temp = keyLines[i];
-				keyLines[i] = keyLines[maxIndex];
-				keyLines[maxIndex] = temp; 
-			}
-		}
+		int i, key, j; 
+		for (i = 1; i < keyLines.size(); i++) 
+		{ 
+			switchStartAndEnd(keyLines[i]);
+			if( i == 1 )
+				switchStartAndEnd(keyLines[0]);
+			float key = keyLines[i].startPointX; 
+			KeyLine keyLine = keyLines[i];
+			j = i-1; 
+		
+			/* Move elements of arr[0..i-1], that are 
+				greater than key, to one position ahead 
+				of their current position */
+			while (j >= 0 && keyLines[j].startPointX > key) 
+			{ 
+				keyLines[j+1] = keyLines[j]; 
+				j = j-1; 
+			} 
+			keyLines[j+1] = keyLine; 
+		} 
+	}
+}
+
+
+void switchStartAndEnd(KeyLine &kl){
+	if( kl.startPointX > kl.endPointX ){
+		float tempX = kl.startPointX;
+		float tempY = kl.startPointY;
+		kl.startPointX = kl.endPointX;
+		kl.endPointX = tempX;
+		kl.startPointY = kl.endPointY;
+		kl.endPointY = tempY;
 	}
 }
 
@@ -818,61 +774,4 @@ bool doIntersect(Point p1, Point q1, Point p2, Point q2)
     if (o4 == 0 && onSegment(p2, q1, q2)) return true; 
   
     return false; // Doesn't fall in any of the above cases 
-} 
-
-
-Point getIntersectionPoint(Point p1, Point q1, Point p2, Point q2) 
-{ 
-	if( p1.x < q1.x ) {
-		p1.x = p1.x - 45;
-		q1.x = q1.x + 45;
-	} else {
-		p1.x = p1.x + 45;
-		q1.x = q1.x - 45;
-	}
-	if( p1.y < q1.y ) {
-		p1.y = p1.y - 45;
-		q1.y = q1.y + 45;
-	} else {
-		p1.y = p1.y + 45;
-		q1.y = q1.y - 45;
-	}
-	if( p2.x < q2.x ) {
-		p2.x = p2.x - 45;
-		q2.x = q2.x + 45;
-	} else {
-		p2.x = p2.x + 45;
-		q2.x = q2.x - 45;
-	}
-	if( p2.y < q2.y ) {
-		p2.y = p2.y - 45;
-		q2.y = q2.y + 45;
-	} else {
-		p2.y = p2.y + 45;
-		q2.y = q2.y - 45;
-	}
-    // Line AB represented as a1x + b1y = c1 
-    float a1 = q1.y - p1.y; 
-    float b1 = p1.x - q1.x; 
-    float c1 = a1*(p1.x) + b1*(p1.y); 
-  
-    // Line CD represented as a2x + b2y = c2 
-    float a2 = q2.y - p2.y; 
-    float b2 = p2.x - q2.x; 
-    float c2 = a2*(p2.x)+ b2*(p2.y); 
-  
-	float determinant = a1*b2 - a2*b1; 
-  
-    if (determinant == 0) 
-    { 
-        // The lines are parallel. This is simplified 
-        // by returning a pair of FLT_MAX 
-        return Point(-1, -1); 
-    } 
-    else
-    { 
-        float x = (b2*c1 - b1*c2)/determinant; 
-        float y = (a1*c2 - a2*c1)/determinant; 
-        return Point(x, y); 
-    } 
 } 
