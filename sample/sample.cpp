@@ -74,7 +74,7 @@ int main( int argc, char** argv )
 		cap.read(cameraFeed);
 
 		Mat bgr_blur, hsv_image;
-		bgr_image = imread("field3.jpg", CV_LOAD_IMAGE_COLOR);
+		bgr_image = imread("field6.jpg", CV_LOAD_IMAGE_COLOR);
 		
 		//bgr_image = cameraFeed.clone();
 		resize(bgr_image, bgr_image, Size(300,300), 0,0,1);
@@ -369,8 +369,8 @@ void drawField(Mat &hsv_img){
 	detectTCorners( mergedLines, tCornerLines, normalLines );
 	detectCircleTCorner( mergedLines, circleLineCorners );
 	drawLines(output, mergedLines, 2);
-	drawLines(output, tCornerLines, 0);
-	drawLines(output, circleLineCorners, 3);
+	drawLines(output, tCornerLines, 3);
+	drawLines(output, circleLineCorners, 0);
 	imshow("LSD", output);
 }
 
@@ -404,7 +404,7 @@ void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 			} 
 		}
 		mergedLines.push_back(mainLine);
-	} while(tempLines.size() > 1);
+	} while(tempLines.size() > 0);
 
 
 	// to make sure startPointX is always the smaller value than endPointX.
@@ -490,7 +490,7 @@ them to be the colinear lines to be merged. */
 bool areSameLines(KeyLine &kl1, KeyLine &kl2){
 	float distance = calcDistance(&kl1, &kl2);
 	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
-	return (distance < 25.f  && angleDifference < 25) ? true : false;
+	return (distance < 33.f  && angleDifference < 30.f) ? true : false;
 }
 
 
@@ -632,7 +632,6 @@ void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLi
 					bool isCirCleLineCorner = true;
 					vector<KeyLine> LCorners;
 					detectLCorners(mergedLines, LCorners);
-					cout << LCorners.size() << endl;
 					if( LCorners.size() >= 1 ){
 						isCirCleLineCorner = false;
 					}
