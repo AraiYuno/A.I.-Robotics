@@ -54,8 +54,11 @@ bool isTCorner(KeyLine &kl1, KeyLine &kl2);
 bool doIntersect(Point p1, Point q1, Point p2, Point q2);
 int orientation(Point p, Point q, Point r);
 bool onSegment(Point p, Point q, Point r);
+float calcLineLength(KeyLine &kl);
+float calcAngleBetweenTwoLines(KeyLine &kl1, KeyLine &kl2);
 Point getIntersectionPoint(KeyLine &kl1, KeyLine &kl2 );
-
+void printLines(std::vector<KeyLine> lines);
+void printTwoLines(KeyLine &mainLine, KeyLine &line);
 
 
 /** @function main */
@@ -74,7 +77,7 @@ int main( int argc, char** argv )
 		cap.read(cameraFeed);
 
 		Mat bgr_blur, hsv_image;
-		bgr_image = imread("field6.jpg", CV_LOAD_IMAGE_COLOR);
+		bgr_image = imread("field1.jpg", CV_LOAD_IMAGE_COLOR);
 		
 		//bgr_image = cameraFeed.clone();
 		resize(bgr_image, bgr_image, Size(300,300), 0,0,1);
@@ -367,10 +370,11 @@ void drawField(Mat &hsv_img){
 	vector<KeyLine> mergedLines, tCornerLines, tCornerLCornerLines, normalLines, circleLineCorners;
 	cleanUpLines( keyLines, mergedLines);
 	detectTCorners( mergedLines, tCornerLines, normalLines );
-	detectCircleTCorner( mergedLines, circleLineCorners );
+	// detectCircleTCorner( mergedLines, circleLineCorners );
 	drawLines(output, mergedLines, 2);
 	drawLines(output, tCornerLines, 3);
-	drawLines(output, circleLineCorners, 0);
+	// drawLines(output, circleLineCorners, 0);
+	// printLines(mergedLines);
 	imshow("LSD", output);
 }
 
@@ -391,16 +395,33 @@ void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 		int size = lines.size();
 		for( int i = 0; i < size; i++ ){
 			KeyLine line = lines[i];
-			if( !mainLineIsSelected ){
-				mainLine = line;
-				mainLineIsSelected = true;
-			} else {
-				switchStartAndEnd(mainLine); // to make sure that startPointX is the smaller value than endPointX at all times.
-				if( areSameLines(mainLine, line) ){ // we compare the mainLine and kl to see if we need to merge.
-					mergeLines(mainLine, line);
+			if( calcLineLength(line) > 20 ){
+				if( !mainLineIsSelected ){
+					mainLine = line;
+					mainLineIsSelected = true;
 				} else {
-					tempLines.push_back(lines[i]);	
-				}	
+					// cout << "Num Lines: " << lines.size() << endl;
+					// cout << "--------------------------------------------------------------------------" << endl;
+					// cout << "MainLine" << endl;
+					// cout << "	->Start( " << mainLine.startPointX << ", " << mainLine.startPointY <<") - End(" << mainLine.endPointX << ", " << mainLine.endPointY << ")" << endl;
+					// cout << "   -> Line Length: " << calcLineLength(mainLine) << endl;
+					// cout << "toCompare" << endl;
+					// cout << "	->Start( " << line.startPointX << ", " << line.startPointY <<") - End(" << line.endPointX << ", " << line.endPointY << ")" << endl;
+					// cout << "   -> Line Length: " << calcLineLength(line) << endl;
+					// cout << ":: Distance: " << calcDistance(&mainLine, &line) << endl;;
+					// cout << ":: angle Difference: " << calcAngleBetweenTwoLines(mainLine, line) << endl;
+					// cout << "--------------------------------------------------------------------------" << endl;
+					switchStartAndEnd(line);
+					switchStartAndEnd(mainLine); // to make sure that startPointX is the smaller value than endPointX at all times.
+					if( areSameLines(mainLine, line) ){ // we compare the mainLine and kl to see if we need to merge.
+						mergeLines(mainLine, line);
+						// cout << "is Merged" << endl;
+					} else {
+						tempLines.push_back(lines[i]);
+						// cout << "not merged" << endl;	
+					}	
+					//cout << endl;
+				}
 			} 
 		}
 		mergedLines.push_back(mainLine);
@@ -413,24 +434,24 @@ void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 	}
 
 	// This segment of code merges parallel lines.
-	vector<KeyLine> parallelLines;
-	int size = mergedLines.size();
-	for( int i = 0; i < size; i++ ){
-		for( int j = i + 1; j < size; j++ ){
-			if( mergeParalellLine( mergedLines[i], mergedLines[j]))
-				parallelLines.push_back(mergedLines[j]);
-		}
-	}
-	for( int i = 0; i < parallelLines.size(); i++ ){
-		float toCompareX = parallelLines[i].startPointX;
-		float toCompareY = parallelLines[i].startPointY;
-		for( int j = 0; j < mergedLines.size(); j++ ){
-			if( toCompareX == mergedLines[j].startPointX && toCompareY == mergedLines[j].startPointY ){
-				mergedLines.erase(mergedLines.begin() + j);
-				break;
-			}
-		}	
-	}
+	// vector<KeyLine> parallelLines;
+	// int size = mergedLines.size();
+	// for( int i = 0; i < size; i++ ){
+	// 	for( int j = i + 1; j < size; j++ ){
+	// 		if( mergeParalellLine( mergedLines[i], mergedLines[j]))
+	// 			parallelLines.push_back(mergedLines[j]);
+	// 	}
+	// }
+	// for( int i = 0; i < parallelLines.size(); i++ ){
+	// 	float toCompareX = parallelLines[i].startPointX;
+	// 	float toCompareY = parallelLines[i].startPointY;
+	// 	for( int j = 0; j < mergedLines.size(); j++ ){
+	// 		if( toCompareX == mergedLines[j].startPointX && toCompareY == mergedLines[j].startPointY ){
+	// 			mergedLines.erase(mergedLines.begin() + j);
+	// 			break;
+	// 		}
+	// 	}	
+	// }
 }
 
 
@@ -489,8 +510,16 @@ bool mergeParalellLine(KeyLine &kl1, KeyLine &kl2){
 them to be the colinear lines to be merged. */
 bool areSameLines(KeyLine &kl1, KeyLine &kl2){
 	float distance = calcDistance(&kl1, &kl2);
-	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
-	return (distance < 33.f  && angleDifference < 30.f) ? true : false;
+	float angleDifference = std::abs(calcAngleBetweenTwoLines(kl1, kl2));
+	return (distance < 33.f  && angleDifference < 15.f) ? true : false;
+}
+
+
+float calcAngleBetweenTwoLines(KeyLine &kl1, KeyLine &kl2){
+	float slopeKl1 = (kl1.endPointY - kl1.startPointY)/(kl1.endPointX - kl1.startPointX);
+	float slopeKl2 = (kl2.endPointY - kl2.startPointY)/(kl2.endPointX - kl2.startPointX);
+	float tanTheta = (slopeKl1 - slopeKl2)/(1 + slopeKl1*slopeKl2);
+	return std::atan(tanTheta) * (180.0/3.141592653589793238463);
 }
 
 
@@ -598,7 +627,7 @@ void detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines){
 /* Summary: isLCorner simply returns true or false boolean value by checking if kl1 and kl2 are L corner relation. */
 bool isLCorner(KeyLine &kl1, KeyLine &kl2){
 	bool isLCorner = false;
-	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
+	float angleDifference = std::abs(calcAngleBetweenTwoLines(kl1, kl2));
 	if( angleDifference > 50 ){
 		Point kl1StartPt = Point( kl1.startPointX, kl1.startPointY);
 		Point kl1EndPt = Point( kl1.endPointX, kl1.endPointY);
@@ -608,7 +637,7 @@ bool isLCorner(KeyLine &kl1, KeyLine &kl2){
 		// to see if the lines are intersecting as T.
 		if( doIntersect(kl1StartPt, kl1EndPt, kl2StartPt, kl2EndPt) ){
 			float distance = calcDistance(&kl1, &kl2); 
-			if( distance <= 25.0f )
+			if( distance <= 35.0f )
 				isLCorner = true;
 		}
 	}
@@ -682,18 +711,18 @@ void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, 
 /* Summary: isTCorner simply returns true if the two lines are T corner related, false otherwise. */ 
 bool isTCorner(KeyLine &kl1, KeyLine &kl2){
 	bool isTCorner = false;
-	float angleDifference = std::abs(calcAngle(kl1) - calcAngle(kl2));
+	float angleDifference = std::abs(calcAngleBetweenTwoLines(kl1, kl2));
 	if( angleDifference > 50 ){
 		Point kl1StartPt = Point( kl1.startPointX, kl1.startPointY);
 		Point kl1EndPt = Point( kl1.endPointX, kl1.endPointY);
 		Point kl2StartPt = Point( kl2.startPointX, kl2.startPointY);
 		Point kl2EndPt = Point( kl2.endPointX, kl2.endPointY);
-		
+	
 		// if two lines intersect when the angle > 50, then we check each extremes of the line 
 		// to see if the lines are intersecting as T.
 		if( doIntersect(kl1StartPt, kl1EndPt, kl2StartPt, kl2EndPt) ){
 			float distance = calcDistance(&kl1, &kl2);
-			if( distance > 15.0f ){
+			if( distance > 10.0f ){
 				isTCorner = true;
 			}
 		}
@@ -816,4 +845,34 @@ Point getIntersectionPoint(KeyLine &kl1, KeyLine &kl2 ){
         float intersection_Y = m1 * intersection_X + c1;
 		return Point(intersection_X, intersection_Y);
     }
+}
+
+
+float calcLineLength(KeyLine &kl){
+	return std::sqrt( std::pow(kl.endPointX - kl.startPointX, 2) + std::pow(kl.endPointY - kl.startPointY, 2));
+}
+
+
+void printLines(std::vector<KeyLine> lines){
+	cout << "Number of Lines: " << lines.size() << endl;
+	for( int i = 0; i < lines.size(); i++ ){
+		cout << "Start( " << lines[i].startPointX << ", " << lines[i].startPointY <<") - End(" << lines[i].endPointX << ", " << lines[i].endPointY << ")" << endl;
+		cout << "   -> Line Length: " << calcLineLength(lines[i]) << endl;
+	}
+	cout << endl;
+}
+
+
+void printTwoLines(KeyLine &mainLine, KeyLine &line){
+	cout << "--------------------------------------------------------------------------" << endl;
+	cout << "MainLine" << endl;
+	cout << "	->Start( " << mainLine.startPointX << ", " << mainLine.startPointY <<") - End(" << mainLine.endPointX << ", " << mainLine.endPointY << ")" << endl;
+	cout << "   -> Line Length: " << calcLineLength(mainLine) << endl;
+	cout << "toCompare" << endl;
+	cout << "	->Start( " << line.startPointX << ", " << line.startPointY <<") - End(" << line.endPointX << ", " << line.endPointY << ")" << endl;
+	cout << "   -> Line Length: " << calcLineLength(line) << endl;
+	cout << ":: Distance: " << calcDistance(&mainLine, &line) << endl;;
+	cout << ":: angle Difference: " << calcAngleBetweenTwoLines(mainLine, line) << endl;
+	cout << "--------------------------------------------------------------------------" << endl;
+	cout << endl;
 }
