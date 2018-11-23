@@ -22,9 +22,7 @@ int line_v_Low = 157; int line_v_High = 255;
 
 RNG rng(12345);
 
-void updateCanny_Low(int, void* ){}
 
-void updateCanny_High(int, void* ){}
 
 
 Point3i trackBall(Mat &img);
