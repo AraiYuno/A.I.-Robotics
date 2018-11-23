@@ -41,14 +41,16 @@ KeyLine checkTIntersection(KeyLine kl1, KeyLine kl2, Point intersectionPoint);
 float calcAngle(KeyLine &kl);
 bool areSameLines(KeyLine &kl1, KeyLine &kl2);
 void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour);
+void drawCentreCircle( Mat &output, vector<KeyLine> centreCircleLines );
 void sortKeyLines(vector<KeyLine> &keyLines);
 void mergeLines(KeyLine &mainLine, KeyLine &kl);
 bool mergeParalellLine(KeyLine &kl1, KeyLine &kl2);
 void switchStartAndEnd(KeyLine &kl);
 
 /* Intersection */
-void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines);
+void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, bool circleExists);
 void detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines);
+void detectCentreCircleLines(vector<KeyLine> &lines, vector<KeyLine> &centreCircleLines);
 bool isLCorner(KeyLine &kl1, KeyLine &k12);
 bool isTCorner(KeyLine &kl1, KeyLine &kl2);
 bool doIntersect(Point p1, Point q1, Point p2, Point q2);
@@ -68,7 +70,7 @@ int main( int argc, char** argv )
 	
 
 	int top, left, right, bottom;
-	VideoCapture cap(0); 
+	VideoCapture cap(1); 
 
     if(!cap.isOpened())  // check if the camera starts 
          return -1;
@@ -77,9 +79,9 @@ int main( int argc, char** argv )
 		cap.read(cameraFeed);
 
 		Mat bgr_blur, hsv_image;
-		bgr_image = imread("field1.jpg", CV_LOAD_IMAGE_COLOR);
+		//bgr_image = imread("field1.jpg", CV_LOAD_IMAGE_COLOR);
 		
-		//bgr_image = cameraFeed.clone();
+		bgr_image = cameraFeed.clone();
 		resize(bgr_image, bgr_image, Size(300,300), 0,0,1);
 		original = bgr_image.clone();
 
@@ -367,13 +369,20 @@ void drawField(Mat &hsv_img){
 	if( output.channels() == 1 )
 		cvtColor( output, output, COLOR_GRAY2BGR );
 
-	vector<KeyLine> mergedLines, tCornerLines, tCornerLCornerLines, normalLines, circleLineCorners;
+	vector<KeyLine> mergedLines, tCornerLines, tCornerLCornerLines, normalLines, circleLineCorners, centreCircleLines;
 	cleanUpLines( keyLines, mergedLines);
-	detectTCorners( mergedLines, tCornerLines, normalLines );
-	// detectCircleTCorner( mergedLines, circleLineCorners );
+	detectCentreCircleLines( mergedLines, centreCircleLines );
+	if( centreCircleLines.size() <= 5 )
+		detectTCorners( mergedLines, tCornerLines, normalLines );
+	if( centreCircleLines.size() > 5 )
+		detectCircleTCorner( mergedLines, circleLineCorners, true ); 
+	else
+		detectCircleTCorner( mergedLines, circleLineCorners, false ); 
 	drawLines(output, mergedLines, 2);
+	if( centreCircleLines.size() > 5 )
+		drawCentreCircle(output, centreCircleLines);
 	drawLines(output, tCornerLines, 3);
-	// drawLines(output, circleLineCorners, 0);
+	drawLines(output, circleLineCorners, 0);
 	// printLines(mergedLines);
 	imshow("LSD", output);
 }
@@ -475,6 +484,18 @@ void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour){
 	}
 }
 
+
+void drawCentreCircle( Mat &output, vector<KeyLine> centreCircleLines ){
+	float minX = 1000, minY = 1000, maxX = -1000, maxY = -1000;
+	for( int i = 0; i < centreCircleLines.size(); i++ ){
+		minX = (minX > centreCircleLines[i].startPointX) ? centreCircleLines[i].startPointX : minX;
+		minY = (minY > centreCircleLines[i].startPointY) ? centreCircleLines[i].startPointY : minY;
+		maxX = (maxX < centreCircleLines[i].startPointX) ? centreCircleLines[i].startPointX : maxX;
+		maxY = (maxY < centreCircleLines[i].startPointX) ? centreCircleLines[i].startPointX : maxY;
+	}
+	int radius = (maxX - minX > maxY - minY) ? maxX - minX : maxY - minY;
+	circle(output, Point((minX + maxX)/2, (minY + maxY)/2), std::abs(radius/2), Scalar(0, 255, 255), 2);
+}
 
 /* Summary: main merging function for the parallel lines.
 */
@@ -607,6 +628,39 @@ void switchStartAndEnd(KeyLine &kl){
 }
 
 
+void detectCentreCircleLines(vector<KeyLine> &lines, vector<KeyLine> &centreCircleLines){
+	int linesSize = lines.size();
+	for( int i = 0; i < linesSize - 1; i++ ){
+		if( calcLineLength(lines[i]) <= 60 ){
+			KeyLine mainLine = lines[i];
+			for( int j = i + 1; j < linesSize; j++ ){
+				KeyLine toCompare = lines[j];
+				if( calcAngleBetweenTwoLines(mainLine, toCompare) <= 30 && calcDistance(&mainLine, &toCompare) <= 35 ){
+					centreCircleLines.push_back(mainLine);
+					break;					
+				}
+			}
+		}
+	}
+
+	vector<KeyLine> newMergedLines;
+	for( int i = 0; i < lines.size(); i++ ){
+		bool lineExists = false;
+		for( int j = 0; j < centreCircleLines.size(); j++ ){
+			if( centreCircleLines[j].startPointX == lines[i].startPointX && centreCircleLines[j].startPointY == lines[i].startPointY &&
+				centreCircleLines[j].endPointX == lines[i].endPointX && centreCircleLines[j].endPointX == lines[i].endPointX){
+				lineExists = true;
+				break;
+			}
+		}
+		if( !lineExists ){
+			newMergedLines.push_back(lines[i]);
+		}
+	}
+	lines = newMergedLines;
+}
+
+
 /* Summary: detectLCorners detect all the L corners using intersection points, and distance between extremes. */
 void detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines){
 	int linesSize = lines.size();
@@ -648,27 +702,42 @@ bool isLCorner(KeyLine &kl1, KeyLine &kl2){
 /* Summary: detectCircleTCorner detects the centre line T corner. The idea is that if there no L corner present 
 on the field other, then we consider the T corner as centire line T corner. (can be updated using robot's position in 
 the future.) */
-void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines){
-	int mergedLinesSize = mergedLines.size();
-	for( int i = 0; i < mergedLinesSize-1; i++ ){
-		KeyLine mainLine = mergedLines[i];
-		for( int j = i + 1; j < mergedLinesSize; j++ ){
-			KeyLine toCompare = mergedLines[j];
-			if( isTCorner( mainLine, toCompare ) ){
+void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, bool circleExists){
+	if( !circleExists ){
+		int mergedLinesSize = mergedLines.size();
+		for( int i = 0; i < mergedLinesSize-1; i++ ){
+			KeyLine mainLine = mergedLines[i];
+			for( int j = i + 1; j < mergedLinesSize; j++ ){
+				KeyLine toCompare = mergedLines[j];
 				if( isTCorner( mainLine, toCompare ) ){
-					KeyLine tCornerLine = checkTIntersection(mainLine, toCompare, getIntersectionPoint( mainLine, toCompare ));
+					if( isTCorner( mainLine, toCompare ) ){
+						KeyLine tCornerLine = checkTIntersection(mainLine, toCompare, getIntersectionPoint( mainLine, toCompare ));
 
-					bool isCirCleLineCorner = true;
-					vector<KeyLine> LCorners;
-					detectLCorners(mergedLines, LCorners);
-					if( LCorners.size() >= 1 ){
-						isCirCleLineCorner = false;
+						bool isCirCleLineCorner = true;
+						vector<KeyLine> LCorners;
+						detectLCorners(mergedLines, LCorners);
+						if( LCorners.size() >= 1 ){
+							isCirCleLineCorner = false;
+						}
+						if( isCirCleLineCorner )
+							cornerLines.push_back(tCornerLine);
+						break;
 					}
-					if( isCirCleLineCorner )
-						cornerLines.push_back(tCornerLine);
-					break;
 				}
 			}
+		}
+	} else {
+		float maxLength = calcLineLength(mergedLines[0]);
+		int index = 0;
+		for( int i = 1; i < mergedLines.size(); i++ ){
+			int currLineLength =  calcLineLength(mergedLines[i]);
+			if(currLineLength > maxLength){
+				maxLength = currLineLength;
+				index = i;
+			}
+		}
+		if( maxLength > 100 ){
+			cornerLines.push_back(mergedLines[index]);
 		}
 	}
 }
@@ -690,6 +759,7 @@ KeyLine checkTIntersection(KeyLine kl1, KeyLine kl2, Point intersectionPoint){
 void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines){
 	int mergedLinesSize = mergedLines.size();
 	for( int i = 0; i < mergedLinesSize-1; i++ ){
+		bool twoParallelLinesExist = false;
 		KeyLine mainLine = mergedLines[i];
 		for( int j = i + 1; j < mergedLinesSize; j++ ){
 			KeyLine toCompare = mergedLines[j];
@@ -701,6 +771,21 @@ void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, 
 					if( isLCorner(tCornerLine, mergedLines[k])) {
 						cornerLines.push_back(mergedLines[k]);
 					}
+				}
+			}
+		}
+	}
+
+	if( cornerLines.size() < 2 ){
+		for(int i = 0; i < mergedLines.size(); i++ ){
+			KeyLine mainLine = mergedLines[i];
+			for( int j = i + 1; j < mergedLines.size(); j++ ){
+				KeyLine toCompare = mergedLines[j];
+				if( calcAngleBetweenTwoLines(mainLine, toCompare) < 15 && calcLineLength(mainLine) > 100 && calcLineLength(toCompare) > 160 ){
+					cornerLines = vector<KeyLine>();
+					cornerLines.push_back(mainLine);
+					cornerLines.push_back(toCompare);
+					break;
 				}
 			}
 		}
