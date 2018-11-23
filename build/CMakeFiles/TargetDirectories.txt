@@ -1,0 +1,3 @@
+/Users/KJ/Desktop/sample/build/CMakeFiles/rebuild_cache.dir
+/Users/KJ/Desktop/sample/build/CMakeFiles/edit_cache.dir
+/Users/KJ/Desktop/sample/build/CMakeFiles/sample.dir
