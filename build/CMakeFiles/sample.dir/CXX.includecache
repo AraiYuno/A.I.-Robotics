@@ -19,12 +19,6 @@ iterator
 -
 queue
 -
-vector
--
-tuple
--
-stdexcept
--
 opencv2/core/core.hpp
 /Users/KJ/Desktop/sample/opencv2/core/core.hpp
 opencv2/core/utility.hpp
