@@ -46,6 +46,13 @@ CM730 cm730(&linux_cm730);
 using namespace std;
 using namespace cv;
 
+////////////////////////////////////////////////////////
+///////////////// VISION ///////////////////////////////
+////////////////////////////////////////////////////////
+// Prototype functions for vision part. Implementation at the bottom
+void increaseNumFeatureDetected(vector<string> detectedFeatures);
+string determineFeature();
+
 ///////////////////////////////////////////////////////
 ///////////////// Motion ///////////////////////////
 ///////////////////////////////////////////////////////
@@ -80,6 +87,8 @@ int numParticle = 0;
 
 float motionMap[COL][ROW] = {0};
 int motionMapDegree[COL][ROW] = {0};
+float visionMap[COL][ROW] = {0};
+int visionMapDegree[COL][ROW] = {0};
 
 float normDist[3][3] = 
 {
@@ -128,7 +137,7 @@ void drawField()
 {
     // adjustDegree();
     //load field img and draw any obsticle
-    Mat field = imread("../soccer_field.png",CV_LOAD_IMAGE_COLOR);
+    Mat field = imread("./soccer_field.png",CV_LOAD_IMAGE_COLOR);
     for(int row = 0; row < ROW; row++){
         for(int col=0; col < COL; col++){
             if(obstacleMap[col][row] < 0){
@@ -236,6 +245,7 @@ void turn(int deg){
 void motion(){
 
     cleanMotionMap();
+    printf("HERE!!!1");
     for(int i=0; i<numParticle; i++){
         float particleW = particleProb[i];
         int curX = particles[i][0];
@@ -304,12 +314,18 @@ void printParticles(){
 ///////////////// motion END ///////////////////////////
 ///////////////////////////////////////////////////////
 
+// GLOBAL VARIABLES
 int button = 1;
 bool pressed = false;
 bool ball_found; 
 bool stage1 = 1; 
 bool stage2 = 0; 
 bool stage3 = 0; 
+int numFramesForVision = 0; // to count 10 frames for feature detection
+int numParallelGoalLines = 0; // to count how many times each feature was detected in these 10 frames.
+int numCencirCircle = 0;
+int numCentreTCorner = 0;
+int numTCornerAtGoalLines = 0;
 Point3i marker1;
 Point3i marker2;
 Point3i marker3;
@@ -475,6 +491,33 @@ void adjustWalkRight()
 
 int main(void) 
 {
+////////////////////  Initialize Movement particles////////////////////////////
+	namedWindow("image",CV_WINDOW_AUTOSIZE);
+    //obstacles
+    obstacleMap[10][12] = -1;
+    obstacleMap[8][1] = -1;
+    obstacleMap[3][9] = -1;
+    obstacleMap[14][5] = -1;
+    obstacleMap[22][7] = -1;
+    obstacleMap[5][17] = -1;
+    
+    srand(time(NULL));
+    //setParticle(0,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    setParticle(0,14,1,0,1);
+    numParticle++;
+    //setParticle(1,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    //numParticle++;
+    //setParticle(2,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    //numParticle++;
+    //setParticle(3,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    //numParticle++;
+    //setParticle(4,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    //numParticle++;
+    
+    drawField();
+    if(waitKey(30)>=0){}
+    
+    printf("%s\n", "movement init");
 
 ////////////////////  Initialize Framework////////////////////////////
 	bool ball_found; 
@@ -541,7 +584,6 @@ int main(void)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////// STATUS BUTTON LOOP ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 	while(1) {
 
 		StatusCheck::Check(cm730); ///check microcontroller status
@@ -572,7 +614,7 @@ int main(void)
 
 		/// Main function call for detection
 		marker1 = vision.findColouredObject(vision.rawFrame, vision.threshold1Frame, Scalar(255, 0, 0), 50, 40000, 4, 7, 0.1);																		
-		marker2 = vision.findColouredObject(vision.rawFrame, vision.threshold2Frame, Scalar(0, 255, 0), 50, 40000, 4, 7, 0.1);																					
+		//marker2 = vision.findColouredObject(vision.rawFrame, vision.threshold2Frame, Scalar(0, 255, 0), 50, 40000, 4, 7, 0.1);																					
 		//marker3 = vision.findColouredObject(vision.rawFrame, vision.threshold3Frame, Scalar(0, 255, 0), 100, 40000, 4, 7, 0.1);
 		//char strMarker1[50];
 		//sprintf(strMarker1, "marker1: %d", marker1.z);
@@ -683,15 +725,18 @@ int main(void)
 					}
 					if(rept ==8 || rept ==6 || rept ==4){
 						//adjustWalkLeft();
-						turn(45);
+						turn(-45);
+						drawField();
 					}
 					else if(rept ==7 || rept ==5 || rept ==3){
 						//adjustWalkRight();
-						turn(-45);
+						turn(+45);
+						drawField();
 					}
 					else if(rept ==10 || rept ==9 || rept ==2 ||  rept ==1 || rept ==0){
 						//adjustWalk();
 						//difference+=5;
+						printf("HERE!!!");
 						motion();
 			            updateParticles();
 			            drawField();
@@ -706,29 +751,24 @@ int main(void)
 					
 				}//stage1
 				
-				//Stage 2
+				//Stage 2: Taking 10 frames and detect a feature using the vision.
 				else if(stage2){
-
-					cout << "STAGE 2" << endl; 
-					
-					stage2 = 0;
-					stage1 = 1;
-					
-					timeval a, b; 
-					int difference = 0; 
-
-					gettimeofday(&a, 0);
-						
-					//Set a timer for 2 seconds 
-					while(difference <= 4){
-							
-						Walking::GetInstance()->Stop();
-						gettimeofday(&b, 0); 
-						difference = b.tv_sec - a.tv_sec; 
-					}
-
+					Walking::GetInstance()->Stop();
 					Walking::GetInstance()->A_MOVE_AMPLITUDE = 0;
-
+					cout << "STAGE 2" << endl; 
+					if( numFramesForVision < 10 ){
+						numFramesForVision++;    // we use 10 frames to get the average.
+						vector<string> detectedFeatures = vision.detectFeature(visionMap);
+						if( detectedFeatures.size() > 0 ) // if any feature has been detected
+							increaseNumFeatureDetected(detectedFeatures);
+					}
+					else {
+						stage2 = 0;
+						stage1 = 1;
+						numFramesForVision = 0;
+						string feature = determineFeature(); // "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "TCornerAtGoalLines" 
+						cout << "Feature: " << feature << endl;
+					}
 					if(DEBUG) cout << "Entering Stage 3" << endl;
 				}
 				
@@ -762,3 +802,44 @@ int main(void)
 		}
   }//end while Status Check for buttons
 }//end main
+
+
+
+/////////////////////////////////////////////////////
+//////////////// VISION IMPLEMENTATION //////////////
+/////////////////////////////////////////////////////
+
+//=============================================================================================
+// Author: Kyle Ahn
+//   This function simply increments the numFeatures if they are detected in Vision part so that
+//   we can eventually determine which feature is actually detected by avering 10 frames
+//=============================================================================================
+void increaseNumFeatureDetected(vector<string> detectedFeatures){
+	for( int i = 0; i < detectedFeatures.size(); i++ ){
+		numCencirCircle = (detectedFeatures[i].compare("centreCircle") == 0 ) ? numCencirCircle + 1 : numCencirCircle;
+		numCentreTCorner = (detectedFeatures[i].compare("centreTCorner") == 0 ) ? numCentreTCorner + 1 : numCentreTCorner;
+		numParallelGoalLines = (detectedFeatures[i].compare("parallelGoalLines") == 0 ) ? numParallelGoalLines + 1 : numParallelGoalLines;
+		numTCornerAtGoalLines = (detectedFeatures[i].compare("TCornerAtGoalLines") == 0 ) ? numTCornerAtGoalLines + 1 : numTCornerAtGoalLines;
+	}
+}
+
+
+//=============================================================================================
+// Author: Kyle Ahn
+//   This feature returns a feature that is detected as a string by determining which feature
+//   is the mostly likely a correctly detected feature out of 10 frames.
+//   Returns one of "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "TCornerAtGoalLines" 
+//=============================================================================================
+string determineFeature(){
+	string feature = "";
+	if( numCencirCircle > 3 ){ // since circle can only be detected when there is actually a circle. (will be no confusion with other features )
+		feature = "centreCircle";
+	} 
+	else if( numCentreTCorner >= 3 && numParallelGoalLines <= 4 && numTCornerAtGoalLines <= 4 ){ // if centreTCorner( redline) is detected without parallelLines and goal T lines. ( confusion likely to happen )
+		feature = "centreTCorner";
+	}
+	else if( numParallelGoalLines > 4 && numTCornerAtGoalLines <= 4 && numCentreTCorner){ // if parallel lines are detected, but not goalTCorner nor centreTCorner
+		feature = "parallelGoalLines";
+	}
+	return feature;
+}

@@ -1,10 +1,14 @@
-/*
- * GenericVision.cpp
- * Created on: June 20 2017
- * Author: MengCheng Lau
- * Author: Andy Chi Fung Lun
- */
 #include "GenericVision.h"
+
+// Tuning values for field extraction
+//====================================================================================================
+int field_h_Low = 0; int field_h_High = 153; int field_s_Low = 0; int field_s_High = 189;
+int field_v_Low = 8; int field_v_High = 91;
+int line_h_Low = 118; int line_h_High = 255; int line_s_Low = 123; int line_s_High = 255;
+int line_v_Low = 117; int line_v_High = 255;
+void updateCanny_Low(int, void* ){}
+void updateCanny_High(int, void* ){}
+//====================================================================================================
 
 using namespace cv;
 using namespace std;
@@ -156,7 +160,7 @@ void GenericVision::initGUI()
 {
 	/// GUI with trackbar
 	namedWindow("Control", CV_WINDOW_AUTOSIZE);
-	namedWindow("Colour1", CV_WINDOW_AUTOSIZE);
+	/*namedWindow("Colour1", CV_WINDOW_AUTOSIZE);
 	namedWindow("Colour2", CV_WINDOW_AUTOSIZE);
 	namedWindow("Colour3", CV_WINDOW_AUTOSIZE);
 	namedWindow("Debug", CV_WINDOW_AUTOSIZE);
@@ -166,15 +170,15 @@ void GenericVision::initGUI()
 	createTrackbar("H (Gain):", "Control", &sbHSVGain[0], 60, hTrackbarCbFunc);
 	createTrackbar("S (Gain):", "Control", &sbHSVGain[1], 100, sTrackbarCbFunc);
 	createTrackbar("V (Gain):", "Control", &sbHSVGain[2], 100, vTrackbarCbFunc);
-	markerTrackbarCbFunc(0, NULL);
+	markerTrackbarCbFunc(0, NULL);*/
 }
 
 void GenericVision::showGUI()
 {
 	imshow("Control", rawFrame);
-	imshow("Colour1", threshold1Frame);
-	imshow("Colour2", threshold2Frame);
-	imshow("Colour3", threshold3Frame);
+	//imshow("Colour1", threshold1Frame);
+	// imshow("Colour2", threshold2Frame);
+	// imshow("Colour3", threshold3Frame);
 }
 
 /// find ball with HoughCircles 
@@ -657,332 +661,643 @@ Point3i GenericVision::findColouredObject(Mat &camFrame, Mat &hsvThreshold, Scal
 } /// findColourObject
 
 
-int GenericVision::findNumColouredPixels(string scanDirection, bool isWalkingLeft, bool printFlag){
-	int pixelsCount[8] = {0};
-	int pixelsCountR[4] = {0};
-	int pixelsCountEdge[2] = {0};
-	int pixelsCountEdgeR[2] = {0};
-	int stepStrategy = 0;
-	if(printFlag)
-	{
-		cout <<endl;
-	}
-	
-	for( int y = 0; y < this->threshold1Frame.rows; y++ ){
-		for( int x = 0; x < this->threshold1Frame.cols; x++ ){
-			if(  this->threshold1Frame.at<uchar>(y, x) != 0){
-				if(printFlag&&x%10==0&&y%10==0){
-					cout<<"1 ";
-				}
-				if( y <= 180 && x <= 160 ){
-					pixelsCount[0]++;
-				}
-				else if( y <= 180 && x > 160 ){
-					pixelsCount[1]++;
-				}
-				else if( y > 180 && x <= 160 ){
-					pixelsCount[2]++;
-				}
-				else {
-					pixelsCount[3]++;
-				}
-				//L/R edge pixels
-				if( x > 0 && x <= 50 )
-					pixelsCountEdge[0]++;
-				else if(x > 270 && x <= 320 )
-					pixelsCountEdge[1]++;
-			}
-			else if(  this->threshold2Frame.at<uchar>(y, x) != 0 ){
-				if(printFlag&&x%10==0&&y%10==0){
-					cout<<"2 ";
-				}
-				if( y <= 180 && x <= 160 ){
-					pixelsCount[4]++;
-				}
-				else if( y <= 180 && x > 160 ){
-					pixelsCount[5]++;
-				}
-				else if( y > 180 && x <= 160 ){
-					pixelsCount[6]++;
-				}
-				else {
-					pixelsCount[7]++;
-				}
-			}
-			else if(  this->threshold3Frame.at<uchar>(y, x) != 0 ){
-				if(printFlag&&x%10==0&&y%10==0){
-					cout<<"3 ";
-				}
-				if( y <= 180 && x <= 160 ){
-					pixelsCountR[0]++;
-				}
-				else if( y <= 180 && x > 160 ){
-					pixelsCountR[1]++;
-				}
-				//L/R edge pixels
-				if( x > 0 && x <= 50 )
-					pixelsCountEdgeR[0]++;
-				else if(x > 270 && x <= 320 )
-					pixelsCountEdgeR[1]++;
-			}
-			else if(printFlag&&x%10==0&&y%10==0){
-					cout<<"0 ";
-			}
-		}
-		if(printFlag&&y%10==0){
-					cout<<endl;
-		}
-	}
-	
-	if(printFlag){
-		if(isWalkingLeft)
-			cout << scanDirection << " walking left" << endl;
-		else
-			cout << scanDirection << " walking right" << endl;
-		printf("pixelsCount[0]: %5d    %5d :pixelsCount[1]\n",pixelsCount[0],pixelsCount[1]);
-		printf("pixelsCount[2]: %5d    %5d :pixelsCount[3]\n",pixelsCount[2],pixelsCount[3]);
-		printf("edgeLeft[0]: %5d    %5d :edgeRight[1]\n",pixelsCountEdge[0],pixelsCountEdge[1]);
-	}
-	
-	if( scanDirection == "RedScan"){
-		if(pixelsCountR[0]+pixelsCountR[1] > 11000 && pixelsCountEdgeR[0] > 100 && pixelsCountEdgeR[1] >100 && pixelsCountEdge[0]<100 && pixelsCountEdge[1])
-			stepStrategy = 0; //crawl
-		else if((pixelsCountEdgeR[0] < 100 || pixelsCountEdge[0] >100) && pixelsCountR[1] > 5000)
-			stepStrategy = 2; //right
-		else if((pixelsCountEdgeR[1] < 100 || pixelsCountEdge[0] >100) && pixelsCountR[0] > 5000 )
-			stepStrategy = 1; //left
-		else
-			stepStrategy = -1; //continue walking
-	}
-	else if( isWalkingLeft ){
-		if( scanDirection == "BottomLeftScan" && pixelsCount[3] < 4000 ){
-			//if TOO CLOSE
-			if( pixelsCount[0] + pixelsCount[1] + pixelsCount[2] + pixelsCount[3] > 40000 )
-				stepStrategy = 3;
-				
-	
-			else if(pixelsCount[2] > 4000){
-				stepStrategy = -2;
-			}
-			else{
-				stepStrategy = 1;
-			}
-			//else if( pixelsCount[0] < 3000 && pixelsCount[1] < 3000 && pixelsCount[2] < 3000 && pixelsCount[3] < 3000 )
-			//	stepStrategy = 1;
-			//else if( pixelsCount[0] > 3000 && pixelsCount[2] > 3000 && pixelsCount[1] < 3000 && pixelsCount[3] < 3000 )
-			//	stepStrategy = 1;
-			//else if( pixelsCount[0] < 3000 && pixelsCount[2] < 3000 && pixelsCount[1] > 3000 && pixelsCount[3] > 3000 )
-			//	stepStrategy = 1;
-			//else
-			//	stepStrategy = -2;
-		} 
-		else if(scanDirection == "BottomLeftScan") {
-			stepStrategy = -2;
-		}
-	
-		if( scanDirection == "BottomRightScan" && pixelsCount[2] < 4000 ){
-			//if TOO CLOSE
-			if( pixelsCount[0] + pixelsCount[1] + pixelsCount[2] + pixelsCount[3] > 40000 )
-				stepStrategy = 3;
-				
-			else if(pixelsCount[3] > 4000 ){
-				stepStrategy = 1;
-			}
-			else{
-				stepStrategy = 2;
-			}
-			//if( pixelsCount[0] > 3000 && pixelsCount[1] > 3000 && pixelsCount[2] > 3000 && pixelsCount[3] > 3000 )
-			//	stepStrategy = 3;
-			//else if( pixelsCount[0] < 3000 && pixelsCount[1] < 3000 && pixelsCount[2] < 3000 && pixelsCount[3] < 3000 )
-			//	stepStrategy = 2;
-			//else if( pixelsCount[0] > 3000 && pixelsCount[2] > 3000 && pixelsCount[1] < 3000 && pixelsCount[3] < 3000 )
-			//	stepStrategy = 2;
-			//else if( pixelsCount[0] < 3000 && pixelsCount[2] < 3000 && pixelsCount[1] > 3000 && pixelsCount[3] > 3000 )
-			//	stepStrategy = 2;
-			//else
-			//	stepStrategy = 0;
-		} 
-		else if( scanDirection == "BottomRightScan" ) {
-			stepStrategy = 0;
-		}
-		
-		if( scanDirection == "OnWalkingLeftScan" ){
-			cout << "Pixels count: "  << pixelsCount[4] + pixelsCount[5] + pixelsCount[6] + pixelsCount[7] << endl;
-			if( pixelsCount[4] + pixelsCount[5] + pixelsCount[6] + pixelsCount[7] >= 4000 )
-				return 2;
-			else
-				return 1;
-		}
-	} 
-	else {
-		if( scanDirection == "BottomRightScan" && pixelsCount[2] < 4000 ){
-			//if TOO CLOSE
-			if( pixelsCount[0] + pixelsCount[1] + pixelsCount[2] + pixelsCount[3] > 40000 )
-				stepStrategy = 3;
-				
-			else if(pixelsCount[3] > 4000){
-				stepStrategy = 2;
-			}
-			else{
-				stepStrategy = 1;
-			}
-			//if( pixelsCount[0] > 3000 && pixelsCount[1] > 3000 && pixelsCount[2] > 3000 && pixelsCount[3] > 3000 )
-			//	stepStrategy = 3;
-			//else if( pixelsCount[0] < 3000 && pixelsCount[1] < 3000 && pixelsCount[2] < 3000 && pixelsCount[3] < 3000 )
-			//	stepStrategy = 2;
-			//else if( pixelsCount[0] > 3000 && pixelsCount[2] > 3000 && pixelsCount[1] < 3000 && pixelsCount[3] < 3000 )
-			//	stepStrategy = 2;
-			//else if( pixelsCount[0] < 3000 && pixelsCount[2] < 3000 && pixelsCount[1] > 3000 && pixelsCount[3] > 3000 )
-			//	stepStrategy = 2;
-			//else
-			//	stepStrategy = -1;
-		}
-		else if( scanDirection == "BottomRightScan" ) {
-			stepStrategy = -1;
-		}
-		
-		if( scanDirection == "BottomLeftScan" && pixelsCount[3] < 3000 ){
-			//if TOO CLOSE
-			if( pixelsCount[0] + pixelsCount[1] + pixelsCount[2] + pixelsCount[3] > 40000 )
-				stepStrategy = 3;
-				
-	
-			else if(pixelsCount[2] > 4000){
-				stepStrategy = 2;
-			}
-			else{
-				stepStrategy = 1;
-			}
-			
-			//if( pixelsCount[0] > 3000 && pixelsCount[1] > 3000 && pixelsCount[2] > 3000 && pixelsCount[3] > 3000 )
-			//	stepStrategy = 3;
-			//else if( pixelsCount[0] < 3000 && pixelsCount[1] < 3000 && pixelsCount[2] < 3000 && pixelsCount[3] < 3000 )
-			//	stepStrategy = 1;
-			//else if( pixelsCount[0] > 3000 && pixelsCount[2] > 3000 && pixelsCount[1] < 3000 && pixelsCount[3] < 3000 )
-			//	stepStrategy = 1;
-			//else if( pixelsCount[0] < 3000 && pixelsCount[2] < 3000 && pixelsCount[1] > 3000 && pixelsCount[3] > 3000 )
-			//	stepStrategy = 1;
-			//else
-			//	stepStrategy = 0;
-		} 
-		else if(scanDirection == "BottomLeftScan") {
-			stepStrategy = 0;
-		}
-		if( scanDirection == "OnWalkingRightScan" ){
-			cout << "Pixels count: "  << pixelsCount[4] + pixelsCount[5] + pixelsCount[6] + pixelsCount[7] << endl;
-			if( pixelsCount[4] + pixelsCount[5] + pixelsCount[6] + pixelsCount[7] >= 4000 )
-				return 1;
-			else
-				return 2;
-		}
-	}
-	
-	if( scanDirection == "BottomForwardScan" ){
-		if(pixelsCount[0] + pixelsCount[1] + pixelsCount[2] + pixelsCount[3] > 40000 )
-		//if( pixelsCount[0] > 5000 && pixelsCount[1] > 5000 && (pixelsCount[2] > 4000 || pixelsCount[3] > 4000) )
-			stepStrategy = 3;
-		else if( pixelsCountEdge[0] < 100)
-			stepStrategy = 1;
-		else if( pixelsCountEdge[1] < 100)
-			stepStrategy = 2;
-		else
-			stepStrategy = 1;
-	}	
 
-	cout << "StepS: " << stepStrategy << "\n\n"<<endl;
-	return stepStrategy;
+
+
+
+//======================================================================================
+// Author: Kyle Ahn
+//   From here and below, functions used for feature detection and vision part of  the
+//   localisation is implemented.
+//======================================================================================
+vector<string> GenericVision::detectFeature( float (&visionMap)[28][19]){
+	Mat field;
+	original = rawFrame.clone();
+	extractedImg = original.clone(); 
+	resize(original, original, Size(300,300), 0,0,1);
+	resize(extractedImg, extractedImg, Size(300,300), 0,0,1);
+	extractField(extractedImg, field);
+	vector<string> detectedFeatures = drawField(field);
+	imshow("Field Control",field);
+	return detectedFeatures;
+}
+
+
+void GenericVision::calcVisionMap(float (&visionMap)[28][19]){
+
+}
+
+void GenericVision::calcVisionMapDegree(int (&visionMapDegree)[28][19]){
 }
 
 
 
-
-double GenericVision::getAngle(Mat &camFrame, Mat &hsvThreshold1)
+//==========================================================================================
+// Helper functions for feature detection of A1
+//==========================================================================================
+void GenericVision::extractField(Mat &img, Mat &field)
 {
-	double ret = 0;
-	int oneLine[32] = {0};
-	int numX =0;
-	int temp[32] = {0};
-	int numTemp;
-	int zeroTohalf=0;
-	int halfToAll=0;
-	for( int y = 0; y < this->threshold1Frame.rows; y++ ){
-		for( int x = 0; x < this->threshold1Frame.cols; x++ ){
-			if(  this->threshold1Frame.at<uchar>(y, x) != 0){
-				if(x%10==0&&y%10==0){
-					oneLine[x]++;
-					numX++;
+	/// GUI with trackbar
+	namedWindow( "Field Control", CV_WINDOW_AUTOSIZE );
+	createTrackbar( "h (Low):", "Field Control", &field_h_Low, 255, updateCanny_Low);
+	createTrackbar( "h (High):", "Field Control", &field_h_High, 255, updateCanny_High);
+	createTrackbar( "s (Low):", "Field Control", &field_s_Low, 255, updateCanny_Low);
+	createTrackbar( "s (High):", "Field Control", &field_s_High, 255, updateCanny_High);
+	createTrackbar( "v (Low):", "Field Control", &field_v_Low, 255, updateCanny_Low);
+	createTrackbar( "v (High):", "Field Control", &field_v_High, 255, updateCanny_High);
+
+	Mat hsv_threshold;
+
+	inRange(img, cv::Scalar(field_h_Low, field_s_Low, field_v_Low), cv::Scalar(field_h_High, field_s_High, field_v_High), hsv_threshold);
+	
+	Mat element = getStructuringElement(MORPH_RECT,Size(50,50), Point(1,1));
+	morphologyEx(hsv_threshold, hsv_threshold, MORPH_CLOSE , element);
+
+	Mat canny;
+
+	Mat result = original.clone();
+	Mat out;
+	result.copyTo(out, hsv_threshold);
+
+	field = out;
+}
+
+
+vector<string> GenericVision::drawField(Mat &hsv_img){
+	namedWindow( "Line Control", CV_WINDOW_AUTOSIZE );
+	createTrackbar( "h (Low):", "Line Control", &line_h_Low, 255, updateCanny_Low);
+	createTrackbar( "h (High):", "Line Control", &line_h_High, 255, updateCanny_High);
+	createTrackbar( "s (Low):", "Line Control", &line_s_Low, 255, updateCanny_Low);
+	createTrackbar( "s (High):", "Line Control", &line_s_High, 255, updateCanny_High);
+	createTrackbar( "v (Low):", "Line Control", &line_v_Low, 255, updateCanny_Low);
+	createTrackbar( "v (High):", "Line Control", &line_v_High, 255, updateCanny_High);
+	
+	medianBlur(hsv_img, hsv_img, 5);
+	Mat cann, img;
+	inRange(hsv_img, cv::Scalar(line_h_Low, line_s_Low, line_v_Low), cv::Scalar(line_h_High, line_s_High, line_v_High), cann);
+	bitwise_not ( cann, img );
+	imshow("Line Control", img);
+	resize(img, img, Size(300,300),0,0,CV_INTER_LINEAR);
+	Mat mask = Mat::ones( img.size(), CV_8UC1 );
+	Ptr<LineSegmentDetector> ls = createLineSegmentDetector(LSD_REFINE_STD);
+	    // Detect the lines
+	vector<Vec4f> lines_std;
+	std::vector<KeyLine> keyLines;
+    ls->detect(img, lines_std);
+	// convert all the vec4f to KeyLine for calculation convenience.
+	for(int i = 0; i < lines_std.size(); i++)
+	{
+		KeyLine key = KeyLine();
+		Vec4f vec = lines_std[i];
+		key.startPointX = vec[0];
+		key.startPointY = vec[1];
+		key.endPointX =  vec[2];
+		key.endPointY = vec[3];
+		keyLines.push_back(key);
+	}
+
+	// sort the lines by x in ascending order using startPointX
+	vector<string> detectedFeatures;
+	sortKeyLines(keyLines);
+	cv::Mat output = img.clone();
+	if( output.channels() == 1 )
+		cvtColor( output, output, COLOR_GRAY2BGR );
+	vector<KeyLine> mergedLines, tCornerLines, tCornerLCornerLines, normalLines, circleLineCorners, centreCircleLines;
+	cleanUpLines( keyLines, mergedLines);
+	detectCentreCircleLines( mergedLines, centreCircleLines );
+	if( centreCircleLines.size() <= 5 )
+		detectTCorners( mergedLines, tCornerLines, normalLines );
+	if( centreCircleLines.size() > 5 )
+		detectCircleTCorner( mergedLines, circleLineCorners, true ); 
+	else
+		detectCircleTCorner( mergedLines, circleLineCorners, false ); 
+	drawLines(output, mergedLines, 2);
+	
+	// if there exists a centre  circle in the field, we draw a centre circle in our output.
+	// TODO: I need to be able to return a combination of different strings depending on the detected features.
+	if( centreCircleLines.size() > 5 ){
+		drawCentreCircle(output, centreCircleLines);
+		detectedFeatures.push_back("centreCircle");
+	}
+	if( tCornerLines.size() >= 1 ){
+		drawLines(output, tCornerLines, 3);
+	}
+	drawLines(output, circleLineCorners, 0);
+	imshow("LSD", output);
+	return detectedFeatures;
+}
+
+
+
+/* Summary: cleanUpLines is the main merging function which merges all the colinear and parallel lines detected by the LSD function. 
+*/
+void GenericVision::cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
+	vector<KeyLine> tempLines;
+
+	// in this do_while loop, we join all the colinear lines.
+	do {
+		if( tempLines.size() > 1 ){
+			lines = tempLines;
+			tempLines = vector<KeyLine>();
+		}
+		bool mainLineIsSelected = false;
+		KeyLine mainLine;
+		int size = lines.size();
+		for( int i = 0; i < size; i++ ){
+			KeyLine line = lines[i];
+			if( calcLineLength(line) > 20 ){
+				if( !mainLineIsSelected ){
+					mainLine = line;
+					mainLineIsSelected = true;
+				} else {
+					switchStartAndEnd(line);
+					switchStartAndEnd(mainLine); // to make sure that startPointX is the smaller value than endPointX at all times.
+					if( areSameLines(mainLine, line) ){ // we compare the mainLine and kl to see if we need to merge.
+						mergeLines(mainLine, line);
+					} else {
+						tempLines.push_back(lines[i]);
+					}	
+				}
+			} 
+		}
+		mergedLines.push_back(mainLine);
+	} while(tempLines.size() > 0);
+
+
+	// to make sure startPointX is always the smaller value than endPointX.
+	for( int i = 0; i < mergedLines.size(); i++ ){
+		switchStartAndEnd(mergedLines[i]);
+	}
+}
+
+
+/* Summary: drawLines simply draws lines.
+ */
+void GenericVision::drawLines( Mat &output, vector<KeyLine> &keyLines, int colour){
+	for( unsigned int i = 0; i < keyLines.size(); i++ ) {
+		KeyLine kl = keyLines[i];
+		Point pt1 = Point( kl.startPointX, kl.startPointY );
+		Point pt2 = Point( kl.endPointX, kl.endPointY );
+
+		/* draw line */
+		if( colour == 0 ) // red T corners.
+			line( output, pt1, pt2, Scalar( 0, 0, 255 ), 5 );
+		else if( colour == 1 ) // yellow centre circle
+			line( output, pt1, pt2, Scalar( 0, 255, 255 ), 5 );
+		else if( colour == 2 ) // blue normal lines
+			line( output, pt1, pt2, Scalar( 255, 0, 0 ), 5 );
+		else if( colour == 3 ) // pink for circle line corners.
+			line( output, pt1, pt2, Scalar( 180, 105, 255 ), 5 );			
+	}
+}
+
+
+void GenericVision::drawCentreCircle( Mat &output, vector<KeyLine> centreCircleLines ){
+	float minX = 1000, minY = 1000, maxX = -1000, maxY = -1000;
+	for( int i = 0; i < centreCircleLines.size(); i++ ){
+		minX = (minX > centreCircleLines[i].startPointX) ? centreCircleLines[i].startPointX : minX;
+		minY = (minY > centreCircleLines[i].startPointY) ? centreCircleLines[i].startPointY : minY;
+		maxX = (maxX < centreCircleLines[i].startPointX) ? centreCircleLines[i].startPointX : maxX;
+		maxY = (maxY < centreCircleLines[i].startPointX) ? centreCircleLines[i].startPointX : maxY;
+	}
+	int radius = (maxX - minX > maxY - minY) ? maxX - minX : maxY - minY;
+	circle(output, Point((minX + maxX)/2, (minY + maxY)/2), std::abs(radius/2), Scalar(0, 255, 255), 2);
+}
+
+
+/* If two lines are near to one another, and have similar angles, we consider
+them to be the colinear lines to be merged. */
+bool GenericVision::areSameLines(KeyLine &kl1, KeyLine &kl2){
+	float distance = calcDistance(&kl1, &kl2);
+	float angleDifference = std::abs(calcAngleBetweenTwoLines(kl1, kl2));
+	return (distance < 33.f  && angleDifference < 15.f) ? true : false;
+}
+
+
+float GenericVision::calcAngleBetweenTwoLines(KeyLine &kl1, KeyLine &kl2){
+	float slopeKl1 = (kl1.endPointY - kl1.startPointY)/(kl1.endPointX - kl1.startPointX);
+	float slopeKl2 = (kl2.endPointY - kl2.startPointY)/(kl2.endPointX - kl2.startPointX);
+	float tanTheta = (slopeKl1 - slopeKl2)/(1 + slopeKl1*slopeKl2);
+	return std::atan(tanTheta) * (180.0/3.141592653589793238463);
+}
+
+
+/* Summary: since the lines are already sorted by x in ascending order, we can simply extend mainLine
+by setting its endPoint to kl's endPoint. */
+void GenericVision::mergeLines(KeyLine &mainLine, KeyLine &kl){
+	mainLine.endPointX = kl.endPointX;
+	mainLine.endPointY = kl.endPointY;
+}
+
+
+/* Summary: calcDistance calculates and returns the minimum distance amongst the combinations of 4 points (2 line segments)*/
+float GenericVision::calcDistance(KeyLine *kl1, KeyLine *kl2){
+	Point kl1StartPt = Point( kl1->startPointX, kl1->startPointY );
+	Point kl1EndPt = Point( kl1->endPointX, kl1->endPointY );
+	Point kl2StartPt = Point( kl2->startPointX, kl2->startPointY);
+	Point kl2EndPt = Point( kl2->endPointX, kl2->endPointY );
+
+	float startToStartXDiff = kl1StartPt.x - kl2StartPt.x;
+	float startToEndXDiff = kl1StartPt.x - kl2EndPt.x;
+	float startToStartYDiff = kl1StartPt.y - kl2StartPt.y;
+	float startToEndYDiff = kl1StartPt.y - kl2EndPt.y;
+	float endToStartXDiff = kl1EndPt.x - kl2StartPt.x;
+	float endToEndXDiff = kl1EndPt.x - kl2EndPt.x;
+	float endToStartYDiff = kl1EndPt.y - kl2StartPt.y;
+	float endToEndYDiff = kl1EndPt.y - kl2EndPt.y;
+	
+	float startToStart = sqrt(startToStartXDiff*startToStartXDiff + startToStartYDiff*startToStartYDiff);
+	float startToEnd = sqrt(startToEndXDiff*startToEndXDiff + startToEndYDiff*startToEndYDiff);
+	float endToStart = sqrt(endToStartXDiff*endToStartXDiff + endToStartYDiff*endToStartYDiff);
+	float endToEnd = sqrt(endToEndXDiff*endToEndXDiff + endToEndYDiff*endToEndYDiff);
+
+	float startToStartEnd = (startToStart <= startToEnd) ? startToStart : startToEnd;
+	float endToStartEnd = (endToStart <= endToEnd ) ? endToStart : endToEnd;
+	return ( (startToStartEnd <= endToStartEnd ) ? startToStartEnd : endToStartEnd );
+}
+
+
+/* Summary: calcAngle simply caculates the angle of the given line segment in range of 0 ~ 180 degrees. */
+float GenericVision::calcAngle(KeyLine &kl){
+	float angle;
+	angle = atan2(kl.startPointY, kl.startPointX)  - atan2(kl.endPointY, kl.endPointX);
+	angle = angle * 360.0f / (2*PI);
+	if( angle < 0 )
+		angle += 360;
+	return (angle > 180.0f) ? angle - 180.0f : angle;
+}
+
+
+/* Summary: sortKeyLines simply sorts the given keyLines by x in ascending order using startPointX. 
+If the startPointX is larger than its endPointX, we simply switch the extreme the other way.*/
+void GenericVision::sortKeyLines(vector<KeyLine> &keyLines){
+	if( keyLines.size() > 1 ){
+		int i, key, j; 
+		for (i = 1; i < keyLines.size(); i++) 
+		{ 
+			switchStartAndEnd(keyLines[i]);
+			if( i == 1 )
+				switchStartAndEnd(keyLines[0]);
+			float key = keyLines[i].startPointX; 
+			KeyLine keyLine = keyLines[i];
+			j = i-1; 
+		
+			while (j >= 0 && keyLines[j].startPointX > key) 
+			{ 
+				keyLines[j+1] = keyLines[j]; 
+				j = j-1; 
+			} 
+			keyLines[j+1] = keyLine; 
+		} 
+	}
+}
+
+
+/* Summary: helper function to ensure that startPointX is always the smaller value. */
+void GenericVision::switchStartAndEnd(KeyLine &kl){
+	if( kl.startPointX > kl.endPointX ){
+		float tempX = kl.startPointX;
+		float tempY = kl.startPointY;
+		kl.startPointX = kl.endPointX;
+		kl.endPointX = tempX;
+		kl.startPointY = kl.endPointY;
+		kl.endPointY = tempY;
+	}
+}
+
+
+void GenericVision::detectCentreCircleLines(vector<KeyLine> &lines, vector<KeyLine> &centreCircleLines){
+	int linesSize = lines.size();
+	for( int i = 0; i < linesSize - 1; i++ ){
+		if( calcLineLength(lines[i]) <= 60 ){
+			KeyLine mainLine = lines[i];
+			for( int j = i + 1; j < linesSize; j++ ){
+				KeyLine toCompare = lines[j];
+				if( calcAngleBetweenTwoLines(mainLine, toCompare) <= 30 && calcDistance(&mainLine, &toCompare) <= 35 ){
+					centreCircleLines.push_back(mainLine);
+					break;					
 				}
 			}
 		}
-		if(oneLine>0){
-			for(int k =0; k<32 ; k++){
-				temp[k] = oneLine[k];
+	}
+
+	vector<KeyLine> newMergedLines;
+	for( int i = 0; i < lines.size(); i++ ){
+		bool lineExists = false;
+		for( int j = 0; j < centreCircleLines.size(); j++ ){
+			if( centreCircleLines[j].startPointX == lines[i].startPointX && centreCircleLines[j].startPointY == lines[i].startPointY &&
+				centreCircleLines[j].endPointX == lines[i].endPointX && centreCircleLines[j].endPointX == lines[i].endPointX){
+				lineExists = true;
+				break;
 			}
-			numTemp = numX;
-			oneLine[32] = {0};
-			numX = 0;
-		}else{
-			break;
+		}
+		if( !lineExists ){
+			newMergedLines.push_back(lines[i]);
 		}
 	}
-	if(numTemp<29){
-		for(int k =0; k<32 ; k++){
-			if(temp[k]>0 && k<17)
-				zeroTohalf++;
-			else if(temp[k]>0)
-				halfToAll++;
-		}
-		if(zeroTohalf>halfToAll)
-			ret = 1;
-		else
-			ret = 2;
-		
-	}
-	return ret;
-	/*Mat threshold_output;
-	vector<vector<Point> > contours;
-	vector<Vec4i> hierarchy;
-	
-	findContours(hsvThreshold1 , contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
-	
-	vector<RotatedRect> minRect(contours.size());
-	for (size_t i = 0; i < contours.size(); i++)
-	{
-		if(contours[i].size() >= 5)
-			minRect[i] = fitEllipse(contours[i]);
-	}
-	float size = 0;
-	size_t pos = -1;
-	for (size_t i = 0; i< contours.size(); i++)
-	{
-		if (minRect[i].size.width * minRect[i].size.height > size)
-		{
-			size = minRect[i].size.width * minRect[i].size.height;
-			pos = i;
-		}
-		Point2f rect[4];
-		minRect[i].points(rect);
-		for(int j = 0; j < 4; j++)
-		{
-			line(camFrame, rect[j],rect[(j+1)%4], Scalar(0,0,0),1,8);
-		}
-		imshow("bgred", camFrame);
-		imshow("bgred123", hsvThreshold1);
-	}
-	
-	double myContourAngle = 900;
-	if (pos >= 0 && contours.size() > 0)
-	{
-		myContourAngle = minRect[pos].angle;
-		if (minRect[pos].size.width < minRect[pos].size.height) {
-			myContourAngle = myContourAngle - 90;
-		}
-	}
-	
-	return myContourAngle;*/
-	
+	lines = newMergedLines;
 }
-int GenericVision::EvalNumColouredPixels(string scanDirection, bool isWalkingLeft){
-	
-	return 0;
+
+
+/* Summary: detectLCorners detect all the L corners using intersection points, and distance between extremes. */
+void GenericVision::detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines){
+	int linesSize = lines.size();
+	for( int i = 0; i < linesSize - 1; i++ ){
+		KeyLine mainLine = lines[i];
+		for( int j = i + 1; j < linesSize; j++ ){
+			KeyLine toCompare = lines[j];
+			if( isLCorner( mainLine, toCompare ) ){
+				cornerLines.push_back(mainLine);
+				cornerLines.push_back(toCompare);
+				break;
+			}
+		}
+	}
 }
+
+
+/* Summary: isLCorner simply returns true or false boolean value by checking if kl1 and kl2 are L corner relation. */
+bool GenericVision::isLCorner(KeyLine &kl1, KeyLine &kl2){
+	bool isLCorner = false;
+	float angleDifference = std::abs(calcAngleBetweenTwoLines(kl1, kl2));
+	if( angleDifference > 50 ){
+		Point kl1StartPt = Point( kl1.startPointX, kl1.startPointY);
+		Point kl1EndPt = Point( kl1.endPointX, kl1.endPointY);
+		Point kl2StartPt = Point( kl2.startPointX, kl2.startPointY);
+		Point kl2EndPt = Point( kl2.endPointX, kl2.endPointY);
+		// if two lines intersect when the angle > 50, then we check each extremes of the line 
+		// to see if the lines are intersecting as T.
+		if( doIntersect(kl1StartPt, kl1EndPt, kl2StartPt, kl2EndPt) ){
+			float distance = calcDistance(&kl1, &kl2); 
+			if( distance <= 35.0f )
+				isLCorner = true;
+		}
+	}
+	return isLCorner;
+}
+
+
+/* Summary: detectCircleTCorner detects the centre line T corner. The idea is that if there no L corner present 
+on the field other, then we consider the T corner as centire line T corner. (can be updated using robot's position in 
+the future.) */
+void GenericVision::detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, bool circleExists){
+	if( !circleExists ){
+		int mergedLinesSize = mergedLines.size();
+		for( int i = 0; i < mergedLinesSize-1; i++ ){
+			KeyLine mainLine = mergedLines[i];
+			for( int j = i + 1; j < mergedLinesSize; j++ ){
+				KeyLine toCompare = mergedLines[j];
+				if( isTCorner( mainLine, toCompare ) ){
+					if( isTCorner( mainLine, toCompare ) ){
+						KeyLine tCornerLine = checkTIntersection(mainLine, toCompare, getIntersectionPoint( mainLine, toCompare ));
+
+						bool isCirCleLineCorner = true;
+						vector<KeyLine> LCorners;
+						detectLCorners(mergedLines, LCorners);
+						if( LCorners.size() >= 1 ){
+							isCirCleLineCorner = false;
+						}
+						if( isCirCleLineCorner )
+							cornerLines.push_back(tCornerLine);
+						break;
+					}
+				}
+			}
+		}
+	} else {
+		float maxLength = calcLineLength(mergedLines[0]);
+		int index = 0;
+		for( int i = 1; i < mergedLines.size(); i++ ){
+			int currLineLength =  calcLineLength(mergedLines[i]);
+			if(currLineLength > maxLength){
+				maxLength = currLineLength;
+				index = i;
+			}
+		}
+		if( maxLength > 100 ){
+			cornerLines.push_back(mergedLines[index]);
+		}
+	}
+}
+
+
+/* Summary: checkTIntersection simply checks if there exists a L corner that is connected to the goal line T corner */
+KeyLine GenericVision::checkTIntersection(KeyLine kl1, KeyLine kl2, Point intersectionPoint){
+	float kl1StartPtDist = sqrt( pow( kl1.startPointX - intersectionPoint.x, 2 ) + pow(kl1.startPointY - intersectionPoint.y, 2));
+	float kl1EndPtDist = sqrt( pow( kl1.endPointX - intersectionPoint.x, 2 ) + pow(kl1.endPointY - intersectionPoint.y, 2));
+	float kl2StartPtDist = sqrt( pow( kl2.startPointX - intersectionPoint.x, 2 ) + pow(kl2.startPointY - intersectionPoint.y, 2));
+	float kl2EndPtDist = sqrt( pow( kl2.endPointX - intersectionPoint.x, 2 ) + pow(kl2.endPointY - intersectionPoint.y, 2));
+	float kl1Dist = (kl1StartPtDist < kl1EndPtDist) ? kl1StartPtDist : kl1EndPtDist;
+	float kl2Dist = (kl2StartPtDist < kl2EndPtDist) ? kl2StartPtDist : kl2EndPtDist;
+	return (kl1Dist < kl2Dist) ? kl1 : kl2;
+}
+
+
+/* detectTCorners: detects T corners on the field by looking at the distance between extremes and intersection point as well as the angle */
+void GenericVision::detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines){
+	int mergedLinesSize = mergedLines.size();
+	for( int i = 0; i < mergedLinesSize-1; i++ ){
+		bool twoParallelLinesExist = false;
+		KeyLine mainLine = mergedLines[i];
+		for( int j = i + 1; j < mergedLinesSize; j++ ){
+			KeyLine toCompare = mergedLines[j];
+			if( isTCorner( mainLine, toCompare ) ){
+				KeyLine tCornerLine = checkTIntersection(mainLine, toCompare, getIntersectionPoint( mainLine, toCompare ));
+				cornerLines.push_back(tCornerLine);
+
+				for( int k = 0; k < mergedLinesSize; k++ ){
+					if( isLCorner(tCornerLine, mergedLines[k])) {
+						cornerLines.push_back(mergedLines[k]);
+					}
+				}
+			}
+		}
+	}
+
+	if( cornerLines.size() < 2 ){
+		for(int i = 0; i < mergedLines.size(); i++ ){
+			KeyLine mainLine = mergedLines[i];
+			for( int j = i + 1; j < mergedLines.size(); j++ ){
+				KeyLine toCompare = mergedLines[j];
+				if( calcAngleBetweenTwoLines(mainLine, toCompare) < 15 && calcLineLength(mainLine) > 100 && calcLineLength(toCompare) > 160 ){
+					cornerLines = vector<KeyLine>();
+					cornerLines.push_back(mainLine);
+					cornerLines.push_back(toCompare);
+					break;
+				}
+			}
+		}
+	}
+}
+
+
+/* Summary: isTCorner simply returns true if the two lines are T corner related, false otherwise. */ 
+bool GenericVision::isTCorner(KeyLine &kl1, KeyLine &kl2){
+	bool isTCorner = false;
+	float angleDifference = std::abs(calcAngleBetweenTwoLines(kl1, kl2));
+	if( angleDifference > 50 ){
+		Point kl1StartPt = Point( kl1.startPointX, kl1.startPointY);
+		Point kl1EndPt = Point( kl1.endPointX, kl1.endPointY);
+		Point kl2StartPt = Point( kl2.startPointX, kl2.startPointY);
+		Point kl2EndPt = Point( kl2.endPointX, kl2.endPointY);
+	
+		// if two lines intersect when the angle > 50, then we check each extremes of the line 
+		// to see if the lines are intersecting as T.
+		if( doIntersect(kl1StartPt, kl1EndPt, kl2StartPt, kl2EndPt) ){
+			float distance = calcDistance(&kl1, &kl2);
+			if( distance > 10.0f ){
+				isTCorner = true;
+			}
+		}
+	}
+	return isTCorner;
+}
+
+
+// To find orientation of ordered triplet (p, q, r). 
+// The function returns following values 
+// 0 --> p, q and r are colinear 
+// 1 --> Clockwise 
+// 2 --> Counterclockwise 
+int GenericVision::orientation(Point p, Point q, Point r) 
+{ 
+    // for details of below formula. 
+    int val = (q.y - p.y) * (r.x - q.x) - 
+              (q.x - p.x) * (r.y - q.y); 
+  
+    if (val == 0) return 0;  // colinear 
+  
+    return (val > 0)? 1: 2; // clock or counterclock wise 
+} 
+
+
+// Given three colinear points p, q, r, the function checks if 
+// point q lies on line segment 'pr' 
+bool GenericVision::onSegment(Point p, Point q, Point r) 
+{ 
+    if (q.x <= max(p.x, r.x) && q.x >= min(p.x, r.x) && 
+        q.y <= max(p.y, r.y) && q.y >= min(p.y, r.y)) 
+       return true; 
+  
+    return false; 
+} 
+
+
+// The main function that returns true if line segment 'p1q1' 
+// and 'p2q2' intersect. 
+bool GenericVision::doIntersect(Point p1, Point q1, Point p2, Point q2) 
+{ 
+	float lineExtensionLength = 30;
+	if( p1.x < q1.x ) {
+		p1.x = p1.x - lineExtensionLength;
+		q1.x = q1.x + lineExtensionLength;
+	} else {
+		p1.x = p1.x + lineExtensionLength;
+		q1.x = q1.x - lineExtensionLength;
+	}
+	if( p1.y < q1.y ) {
+		p1.y = p1.y - lineExtensionLength;
+		q1.y = q1.y + lineExtensionLength;
+	} else {
+		p1.y = p1.y + lineExtensionLength;
+		q1.y = q1.y - lineExtensionLength;
+	}
+	if( p2.x < q2.x ) {
+		p2.x = p2.x - lineExtensionLength;
+		q2.x = q2.x + lineExtensionLength;
+	} else {
+		p2.x = p2.x + lineExtensionLength;
+		q2.x = q2.x - lineExtensionLength;
+	}
+	if( p2.y < q2.y ) {
+		p2.y = p2.y - lineExtensionLength;
+		q2.y = q2.y + lineExtensionLength;
+	} else {
+		p2.y = p2.y + lineExtensionLength;
+		q2.y = q2.y - lineExtensionLength;
+	}
+    // Find the four orientations needed for general and 
+    // special cases 
+    int o1 = orientation(p1, q1, p2); 
+    int o2 = orientation(p1, q1, q2); 
+    int o3 = orientation(p2, q2, p1); 
+    int o4 = orientation(p2, q2, q1); 
+  
+    // General case 
+    if (o1 != o2 && o3 != o4) 
+        return true; 
+  
+    // Special Cases 
+    // p1, q1 and p2 are colinear and p2 lies on segment p1q1 
+    if (o1 == 0 && onSegment(p1, p2, q1)) return true; 
+  
+    // p1, q1 and q2 are colinear and q2 lies on segment p1q1 
+    if (o2 == 0 && onSegment(p1, q2, q1)) return true; 
+  
+    // p2, q2 and p1 are colinear and p1 lies on segment p2q2 
+    if (o3 == 0 && onSegment(p2, p1, q2)) return true; 
+  
+     // p2, q2 and q1 are colinear and q1 lies on segment p2q2 
+    if (o4 == 0 && onSegment(p2, q1, q2)) return true; 
+  
+    return false; // Doesn't fall in any of the above cases 
+} 
+
+
+/* Summary: getIntersectionPoint receives two KeyLines and finds the intersection point of these two lines. 
+If none, it returns Point(-1, -1). */
+Point GenericVision::getIntersectionPoint(KeyLine &kl1, KeyLine &kl2 ){
+    float dx, dy;
+    dx = kl1.endPointX - kl1.startPointX;
+    dy = kl1.endPointY - kl1.startPointY;
+	float m1 = dy / dx;
+    // y = mx + c
+    // intercept c = y - mx
+    float c1 = kl1.startPointY - m1 * kl1.startPointX; // which is same as y2 - slope * x2
+    dx = kl2.endPointX - kl2.startPointX;
+    dy = kl2.endPointY - kl2.startPointY;
+    float m2 = dy / dx;
+    // y = mx + c
+    // intercept c = y - mx
+    float c2 = kl2.startPointY - m2 * kl2.startPointX; // which is same as y2 - slope * x2
+
+    if( (m1 - m2) == 0)
+        return Point(-1, -1);
+    else {
+        float intersection_X = (c2 - c1) / (m1 - m2);
+        float intersection_Y = m1 * intersection_X + c1;
+		return Point(intersection_X, intersection_Y);
+    }
+}
+
+
+float GenericVision::calcLineLength(KeyLine &kl){
+	return std::sqrt( std::pow(kl.endPointX - kl.startPointX, 2) + std::pow(kl.endPointY - kl.startPointY, 2));
+}
+
+
+void GenericVision::printLines(std::vector<KeyLine> lines){
+	cout << "Number of Lines: " << lines.size() << endl;
+	for( int i = 0; i < lines.size(); i++ ){
+		cout << "Start( " << lines[i].startPointX << ", " << lines[i].startPointY <<") - End(" << lines[i].endPointX << ", " << lines[i].endPointY << ")" << endl;
+		cout << "   -> Line Length: " << calcLineLength(lines[i]) << endl;
+	}
+	cout << endl;
+}
+
+
+void GenericVision::printTwoLines(KeyLine &mainLine, KeyLine &line){
+	cout << "--------------------------------------------------------------------------" << endl;
+	cout << "MainLine" << endl;
+	cout << "	->Start( " << mainLine.startPointX << ", " << mainLine.startPointY <<") - End(" << mainLine.endPointX << ", " << mainLine.endPointY << ")" << endl;
+	cout << "   -> Line Length: " << calcLineLength(mainLine) << endl;
+	cout << "toCompare" << endl;
+	cout << "	->Start( " << line.startPointX << ", " << line.startPointY <<") - End(" << line.endPointX << ", " << line.endPointY << ")" << endl;
+	cout << "   -> Line Length: " << calcLineLength(line) << endl;
+	cout << ":: Distance: " << calcDistance(&mainLine, &line) << endl;;
+	cout << ":: angle Difference: " << calcAngleBetweenTwoLines(mainLine, line) << endl;
+	cout << "--------------------------------------------------------------------------" << endl;
+	cout << endl;
+}
+
+

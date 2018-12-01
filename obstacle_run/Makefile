@@ -25,6 +25,7 @@ clean:
 
 libclean:
 	make -C ../../build clean
+collect2: ld returned 1 exit status
 
 distclean: clean libclean
 
