@@ -2,10 +2,10 @@
 
 // Tuning values for field extraction
 //====================================================================================================
-int field_h_Low = 0; int field_h_High = 153; int field_s_Low = 0; int field_s_High = 189;
-int field_v_Low = 8; int field_v_High = 91;
-int line_h_Low = 118; int line_h_High = 255; int line_s_Low = 123; int line_s_High = 255;
-int line_v_Low = 117; int line_v_High = 255;
+int field_h_Low = 30; int field_h_High = 84; int field_s_Low = 0; int field_s_High = 150;
+int field_v_Low = 0; int field_v_High = 91;
+int line_h_Low = 118; int line_h_High = 255; int line_s_Low = 114; int line_s_High = 255;
+int line_v_Low = 58; int line_v_High = 255;
 void updateCanny_Low(int, void* ){}
 void updateCanny_High(int, void* ){}
 //====================================================================================================
@@ -662,8 +662,55 @@ Point3i GenericVision::findColouredObject(Mat &camFrame, Mat &hsvThreshold, Scal
 
 
 
+int GenericVision::getMoveStrategy()
+{
+	int topLeft =0;
+	int bottomLeft = 0;
+	int topCenter = 0;
+	int bottomCenter = 0;
+	int topRight = 0;
+	int bottomRight = 0;
+	
+	int step = 0;
+	
+	for(int y = 0; y < this->threshold1Frame.rows; y++)
+	{
+		for(int x = 0; x < this->threshold1Frame.cols; x++)
+		{
+				if(x<=100 && y <= 80)
+					topLeft++;
+				else if( x <=100 && y > 80)
+					bottomLeft++;
+				else if( (x >100 && x <=220) && y <= 80)
+					topCenter++;
+				else if( (x >100 && x <=220) && y > 80)
+					bottomCenter++;
+				else if( x > 220 && y <= 80)
+					topRight++;
+				else if( x > 220 && y > 80)
+					bottomRight++;
 
-
+		}	
+	}
+	
+	if(bottomCenter != 0)
+	{
+		step = 2 ;// back
+	}
+	else if(topCenter!= 0)
+	{
+		if(topLeft !=0)
+			step = 4;
+		else if(topRight != 0)
+			step = 3;
+	}
+	else if(topCenter == 0)
+	{
+		step = 1;
+	}
+	
+	return step;
+}
 
 //======================================================================================
 // Author: Kyle Ahn
@@ -677,7 +724,9 @@ vector<string> GenericVision::detectFeature( float (&visionMap)[28][19]){
 	resize(original, original, Size(300,300), 0,0,1);
 	resize(extractedImg, extractedImg, Size(300,300), 0,0,1);
 	extractField(extractedImg, field);
+	//cout << "Before drawfield ExtractField" << endl;
 	vector<string> detectedFeatures = drawField(field);
+	//cout << "After drawField" << endl;
 	imshow("Field Control",field);
 	return detectedFeatures;
 }
@@ -763,10 +812,15 @@ vector<string> GenericVision::drawField(Mat &hsv_img){
 	if( output.channels() == 1 )
 		cvtColor( output, output, COLOR_GRAY2BGR );
 	vector<KeyLine> mergedLines, tCornerLines, tCornerLCornerLines, normalLines, circleLineCorners, centreCircleLines;
+	cout << "before cleanup " << endl;
 	cleanUpLines( keyLines, mergedLines);
+	cout << "after cleanup" << endl;
 	detectCentreCircleLines( mergedLines, centreCircleLines );
-	if( centreCircleLines.size() <= 5 )
-		detectTCorners( mergedLines, tCornerLines, normalLines );
+	if( centreCircleLines.size() <= 5 ){
+		string goalLineFeature = detectGoalLine( mergedLines, tCornerLines, normalLines );
+		if( goalLineFeature.compare("") != 0 )
+			detectedFeatures.push_back(goalLineFeature);
+	}
 	if( centreCircleLines.size() > 5 )
 		detectCircleTCorner( mergedLines, circleLineCorners, true ); 
 	else
@@ -793,14 +847,14 @@ vector<string> GenericVision::drawField(Mat &hsv_img){
 */
 void GenericVision::cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines){
 	vector<KeyLine> tempLines;
-
+	bool mainLineIsSelected;
 	// in this do_while loop, we join all the colinear lines.
 	do {
+		mainLineIsSelected = false;
 		if( tempLines.size() > 1 ){
 			lines = tempLines;
 			tempLines = vector<KeyLine>();
 		}
-		bool mainLineIsSelected = false;
 		KeyLine mainLine;
 		int size = lines.size();
 		for( int i = 0; i < size; i++ ){
@@ -809,6 +863,7 @@ void GenericVision::cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &merge
 				if( !mainLineIsSelected ){
 					mainLine = line;
 					mainLineIsSelected = true;
+					cout << "X: " << mainLine.startPointX << endl;
 				} else {
 					switchStartAndEnd(line);
 					switchStartAndEnd(mainLine); // to make sure that startPointX is the smaller value than endPointX at all times.
@@ -821,8 +876,7 @@ void GenericVision::cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &merge
 			} 
 		}
 		mergedLines.push_back(mainLine);
-	} while(tempLines.size() > 0);
-
+	} while(tempLines.size() > 1);
 
 	// to make sure startPointX is always the smaller value than endPointX.
 	for( int i = 0; i < mergedLines.size(); i++ ){
@@ -1093,8 +1147,11 @@ KeyLine GenericVision::checkTIntersection(KeyLine kl1, KeyLine kl2, Point inters
 }
 
 
-/* detectTCorners: detects T corners on the field by looking at the distance between extremes and intersection point as well as the angle */
-void GenericVision::detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines){
+/* detectGoalLine: detects T corners on the field by looking at the distance between extremes and intersection point as well as the angle
+				   returns whatever feature is detected.
+ */
+string GenericVision::detectGoalLine(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines){
+	string feature = "";
 	int mergedLinesSize = mergedLines.size();
 	for( int i = 0; i < mergedLinesSize-1; i++ ){
 		bool twoParallelLinesExist = false;
@@ -1106,8 +1163,9 @@ void GenericVision::detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine>
 				cornerLines.push_back(tCornerLine);
 
 				for( int k = 0; k < mergedLinesSize; k++ ){
-					if( isLCorner(tCornerLine, mergedLines[k])) {
+					if( isLCorner(tCornerLine, mergedLines[k]) && calcLineLength(mergedLines[k]) >= 30.0f )  {
 						cornerLines.push_back(mergedLines[k]);
+						feature = "TCornerAtGoalLine";
 					}
 				}
 			}
@@ -1119,15 +1177,17 @@ void GenericVision::detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine>
 			KeyLine mainLine = mergedLines[i];
 			for( int j = i + 1; j < mergedLines.size(); j++ ){
 				KeyLine toCompare = mergedLines[j];
-				if( calcAngleBetweenTwoLines(mainLine, toCompare) < 15 && calcLineLength(mainLine) > 100 && calcLineLength(toCompare) > 160 ){
+				if( calcAngleBetweenTwoLines(mainLine, toCompare) < 20 && calcLineLength(mainLine) > 100 && calcLineLength(toCompare) > 100 ){
 					cornerLines = vector<KeyLine>();
 					cornerLines.push_back(mainLine);
 					cornerLines.push_back(toCompare);
+					feature = "parallelGoalLines";
 					break;
 				}
 			}
 		}
 	}
+	return feature;
 }
 
 

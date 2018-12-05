@@ -25,6 +25,7 @@
 #include "Follower.h"
 
 #include "GenericVision.h"
+#include "HelperFunctions.h"
 
 #ifdef MX28_1024
 #define MOTION_FILE_PATH    "../../../Data/motion_1024.bin"
@@ -52,11 +53,65 @@ using namespace cv;
 // Prototype functions for vision part. Implementation at the bottom
 void increaseNumFeatureDetected(vector<string> detectedFeatures);
 string determineFeature();
+void updateVisionMap(string feature);
+void clearFeatureCounter();
+
+#define PI 3.14159265358979323846
+
+//  84 X 57??
+const int COL = 28;
+const int ROW = 19;
+vector<Obstacles> obstacles;
+MyRobot robot;
+
+int particles[5][3];
+float particleProb[5];
+int numParticle = 0;
+
+float motionMap[COL][ROW] = {0};
+int motionMapDegree[COL][ROW] = {0};
+float visionMap[COL][ROW] = {0};
+int visionMapDegree[COL][ROW] = {0};
+float globalMap[COL][ROW] = {0};
+float globalMapDegree[COL][ROW] = {0};
+int dx, dy , rx,ry;
+
+void drawMap();
+void adjustDegree();
+void addObstacle();
+void mapCallBackFunc(int event, int x, int y, int flags, void *userdata)
+{
+	if(event == EVENT_LBUTTONDOWN)
+	{
+		dx = x;
+		dy = y;
+	}
+	else if(event == EVENT_LBUTTONUP)
+	{
+		rx = x;
+		ry = y;
+		int rangle = (atan2(ry - dy, rx-dx) * 180/ PI) - 90;
+		
+		robot.x = dx / 30;
+		robot.y = dy /30;
+		robot.theta = rangle;
+		adjustDegree();
+		cout << "robot pos and angle " << dx/30 << " " << dy/30 << " "<< robot.theta << endl;
+		drawMap();
+	}
+}
+
+////////////////////////////////////////////////////////
+///////////////// VISION ///////////////////////////////
+////////////////////////////////////////////////////////
+// Prototype functions for vision part. Implementation at the bottom
+void increaseNumFeatureDetected(vector<string> detectedFeatures);
+string determineFeature();
 
 ///////////////////////////////////////////////////////
 ///////////////// Motion ///////////////////////////
 ///////////////////////////////////////////////////////
-#define PI 3.14159265358979323846
+
 struct Tuple
 {
     float pd;
@@ -73,22 +128,6 @@ struct Tuple
     }
 };
 
-//  84 X 57??
-const int COL = 28;
-const int ROW = 19;
-int obstacleMap[COL][ROW] = {0};  //global int array
-int degree = 90;    //orientation of robot.
-int robotX = 20;
-int robotY = 2;
-
-int particles[5][3];
-float particleProb[5];
-int numParticle = 0;
-
-float motionMap[COL][ROW] = {0};
-int motionMapDegree[COL][ROW] = {0};
-float visionMap[COL][ROW] = {0};
-int visionMapDegree[COL][ROW] = {0};
 
 float normDist[3][3] = 
 {
@@ -106,9 +145,9 @@ float normDist5[5][5] = {
 
 void adjustDegree()
 {
-    while (degree < 0)
-        degree += 360;
-    degree = degree%360;
+    while (robot.theta < 0)
+        robot.theta += 360;
+    robot.theta = robot.theta % 360;
 }
 
 void printMotionMap(){
@@ -126,29 +165,31 @@ void printMotionMapDegree(){
         printf("%s\n", "");
     }
 }
+void printVisionMap(){
+    for(int i=0; i<ROW; i++){
+        for(int j = 0; j<COL; j++)
+            printf("%0.1f ", visionMap[j][i]);
+        printf("%s\n", "");
+    }
+}
 void updateRobotCoord(){
     //first particle is the most high prob.
-    robotX = particles[0][0];
-    robotY = particles[0][1];
-    degree = particles[0][2];
+    robot.x = particles[0][0];
+    robot.y = particles[0][1];
+    robot.theta = particles[0][2];
 }
 
-void drawField()
+void drawMap()
 {
     // adjustDegree();
     //load field img and draw any obsticle
     Mat field = imread("./soccer_field.png",CV_LOAD_IMAGE_COLOR);
-    for(int row = 0; row < ROW; row++){
-        for(int col=0; col < COL; col++){
-            if(obstacleMap[col][row] < 0){
-                //obstacle.
-                circle(field, Point(col*30+15,row*30+15), 15, Scalar(255,0,255), -1);
-            }
-        }
+    for(int i = 0; i < obstacles.size() ; i++){
+        circle(field, Point(obstacles.at(i).y * 30+15, obstacles.at(i).x * 30+15), 15, Scalar(255,0,255), -1);
     }
 
     //robot location(draw triangle)
-    updateRobotCoord();
+    //updateRobotCoord();
     //triangle coordinate offset
     int x1,x2,x3,y1,y2,y3,fx1,fx2,fx3,fy1,fy2,fy3;
 
@@ -161,18 +202,18 @@ void drawField()
     y3 = -17;
 
     //rotation by degree (add 0.5 for proper rounding)
-    fx1 = x1*cos(degree*PI/180) - y1*sin(degree*PI/180) + 0.5;
-    fy1 = x1*sin(degree*PI/180) + y1*cos(degree*PI/180) + 0.5;
-    fx2 = x2*cos(degree*PI/180) - y2*sin(degree*PI/180) + 0.5;
-    fy2 = x2*sin(degree*PI/180) + y2*cos(degree*PI/180) + 0.5;
-    fx3 = x3*cos(degree*PI/180) - y3*sin(degree*PI/180) + 0.5;
-    fy3 = x3*sin(degree*PI/180) + y3*cos(degree*PI/180) + 0.5;
+    fx1 = x1*cos( robot.theta *PI/180) - y1*sin(robot.theta *PI/180) + 0.5;
+    fy1 = x1*sin(robot.theta*PI/180) + y1*cos(robot.theta*PI/180) + 0.5;
+    fx2 = x2*cos(robot.theta*PI/180) - y2*sin(robot.theta*PI/180) + 0.5;
+    fy2 = x2*sin(robot.theta*PI/180) + y2*cos(robot.theta*PI/180) + 0.5;
+    fx3 = x3*cos(robot.theta*PI/180) - y3*sin(robot.theta*PI/180) + 0.5;
+    fy3 = x3*sin(robot.theta*PI/180) + y3*cos(robot.theta*PI/180) + 0.5;
 
     //add rotated offset
     Point triPoints[3];
-    triPoints[0] = Point(robotX*30+15 + fx1,robotY*30+15 + fy1);
-    triPoints[1] = Point(robotX*30+15 + fx2,robotY*30+15 + fy2);
-    triPoints[2] = Point(robotX*30+15 + fx3,robotY*30+15 + fy3);
+    triPoints[0] = Point(robot.x*30+15 + fx1,robot.y*30+15 + fy1);
+    triPoints[1] = Point(robot.x*30+15 + fx2,robot.y*30+15 + fy2);
+    triPoints[2] = Point(robot.x*30+15 + fx3,robot.y*30+15 + fy3);
     const Point* ppt[1] = { triPoints };
     int npt[] = { 3 };
     fillPoly(field, ppt, npt, 1, Scalar(0, 0, 255), 8);
@@ -288,27 +329,92 @@ void updateParticles(){
     std::priority_queue<Tuple> pq;
     for (int i = 0; i < COL; ++i) {
         for (int j = 0; j < ROW; ++j){
-            if(motionMap[i][j]>0)
+            if(globalMap[i][j]>0)
                 pq.push(Tuple(motionMap[i][j], i, j));
         }
     }
     int top = 5; // number of indices we need
     numParticle = 0;
-    for (int i = 0; i < top/*not empty*/; ++i) {
+    for (int i = 0; i < top && !pq.empty(); ++i) {
         float kip = pq.top().pd;
         int kix = pq.top().x;
         int kiy = pq.top().y;
         pq.pop();
 
-        setParticle(i,kix,kiy,motionMapDegree[kix][kiy],kip);
+        setParticle(i,kix,kiy,globalMapDegree[kix][kiy],kip);
         numParticle++;
     }
-    normalizeParticle();
+    if(numParticle>0)
+		normalizeParticle();
+	else{
+		//randomParticleVision();
+		
+		
+		setParticle(0,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+		numParticle++;
+		setParticle(1,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+		numParticle++;
+		setParticle(2,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+		numParticle++;
+		setParticle(3,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+		numParticle++;
+		setParticle(4,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+		numParticle++;
+	}
 }
 
 void printParticles(){
     for(int i=0;i<5;i++)
         printf("P: %f [%d,%d] %3d\n", particleProb[i],particles[i][0],particles[i][1], particles[i][2]);
+}
+
+void combineACTSEE(){
+    for(int i = 0; i < COL; i++){
+        for(int j = 0; j < ROW; j++){
+            globalMap[i][j] = motionMap[i][j] * visionMap[i][j];
+            globalMapDegree[i][j] = motionMapDegree[i][j] * visionMapDegree[i][j];
+        }
+    }
+}
+
+bool findSameParticle(int x, int y){
+    bool result = false;
+    for(int i=0;i<5;i++){
+        if(particles[i][0] == x && particles[i][1] == y){
+            result = true;
+            break;
+        }
+    }
+    return result;
+}
+
+void randomParticleVision(){
+    for(int i = 0; i <5; i++){
+        bool added = false;
+        while(!added) {
+            int x = (rand() % static_cast<int>(29));
+            int y = (rand() % static_cast<int>(20));
+            if(visionMap[x][y] != 0 && !findSameParticle(x,y)){
+                added = true;
+                particles[i][0] = x;
+                particles[i][1] = y;
+
+                //OR USE DEGREE FROM VISION MAP
+                //particles[i][2] = visionMapDegree[x][y];
+
+                //OR RANDOM DEGREE
+                particles[i][2] = (rand() % static_cast<int>(360));
+            }
+        }
+        particleProb[i] = 0.2;
+    }
+    numParticle = 5;
+
+    printf("x,y,t = (%d,%d,%d)\n", particles[0][0],particles[0][1],particles[0][2]);
+    printf("x,y,t = (%d,%d,%d)\n", particles[1][0],particles[1][1],particles[1][2]);
+    printf("x,y,t = (%d,%d,%d)\n", particles[2][0],particles[2][1],particles[2][2]);
+    printf("x,y,t = (%d,%d,%d)\n", particles[3][0],particles[3][1],particles[3][2]);
+    printf("x,y,t = (%d,%d,%d)\n", particles[4][0],particles[4][1],particles[4][2]);
 }
 ///////////////////////////////////////////////////////
 ///////////////// motion END ///////////////////////////
@@ -364,157 +470,28 @@ void sighandler(int sig)
     exit(0);
 }
 
-// Walking gait parameters that could be change in real-time 
-void adjustWalk()
-{
-    Walking::GetInstance()->X_OFFSET = -11.0;
-    Walking::GetInstance()->Y_OFFSET = 0.0;
-    Walking::GetInstance()->Z_OFFSET = 40.0;
-    Walking::GetInstance()->R_OFFSET = 0;
-    Walking::GetInstance()->P_OFFSET = 0;
-    Walking::GetInstance()->A_OFFSET = -2;
-    Walking::GetInstance()->HIP_PITCH_OFFSET = 15.3;
-    Walking::GetInstance()->PERIOD_TIME = 625.0;
-    Walking::GetInstance()->DSP_RATIO = 0.1;
-    Walking::GetInstance()->STEP_FB_RATIO = 0.0;
-    Walking::GetInstance()->Z_MOVE_AMPLITUDE = 30.0;
-    Walking::GetInstance()->Y_SWAP_AMPLITUDE = 16.9;
-    Walking::GetInstance()->Z_SWAP_AMPLITUDE = 5;
-    Walking::GetInstance()->PELVIS_OFFSET = 2.3;
-    Walking::GetInstance()->ARM_SWING_GAIN = 1.5;
-    Walking::GetInstance()->BALANCE_KNEE_GAIN = 0.3;
-    Walking::GetInstance()->BALANCE_ANKLE_PITCH_GAIN = 0.9;
-    Walking::GetInstance()->BALANCE_HIP_ROLL_GAIN = 0.5;
-    Walking::GetInstance()->BALANCE_ANKLE_ROLL_GAIN = 1.0;
-    Walking::GetInstance()->P_GAIN = 32;
-    Walking::GetInstance()->I_GAIN = 0;
-    Walking::GetInstance()->D_GAIN = 0;
-    Walking::GetInstance()->X_MOVE_AMPLITUDE = 0;
-	Walking::GetInstance()->A_MOVE_AMPLITUDE = 3;
-	Walking::GetInstance()->Y_MOVE_AMPLITUDE = 0;
-    
-    //Head::GetInstance()->MoveByAngle(0, 0); //move head by angle pan and tilt
-}
-
-void adjustWalkStop()
-{
-    Walking::GetInstance()->X_OFFSET = -11.0;
-    Walking::GetInstance()->Y_OFFSET = 0.0;
-    Walking::GetInstance()->Z_OFFSET = 40.0;
-    Walking::GetInstance()->R_OFFSET = 0;
-    Walking::GetInstance()->P_OFFSET = 0;
-    Walking::GetInstance()->A_OFFSET = -2;
-    Walking::GetInstance()->HIP_PITCH_OFFSET = 15.3;
-    Walking::GetInstance()->PERIOD_TIME = 625.0;
-    Walking::GetInstance()->DSP_RATIO = 0.1;
-    Walking::GetInstance()->STEP_FB_RATIO = 0.0;
-    Walking::GetInstance()->Z_MOVE_AMPLITUDE = 30.0;
-    Walking::GetInstance()->Y_SWAP_AMPLITUDE = 16.9;
-    Walking::GetInstance()->Z_SWAP_AMPLITUDE = 5;
-    Walking::GetInstance()->PELVIS_OFFSET = 2.3;
-    Walking::GetInstance()->ARM_SWING_GAIN = 1.5;
-    Walking::GetInstance()->BALANCE_KNEE_GAIN = 0.3;
-    Walking::GetInstance()->BALANCE_ANKLE_PITCH_GAIN = 0.9;
-    Walking::GetInstance()->BALANCE_HIP_ROLL_GAIN = 0.5;
-    Walking::GetInstance()->BALANCE_ANKLE_ROLL_GAIN = 1.0;
-    Walking::GetInstance()->P_GAIN = 32;
-    Walking::GetInstance()->I_GAIN = 0;
-    Walking::GetInstance()->D_GAIN = 0;
-    Walking::GetInstance()->X_MOVE_AMPLITUDE = -2;
-	Walking::GetInstance()->A_MOVE_AMPLITUDE = 4;
-	Walking::GetInstance()->Y_MOVE_AMPLITUDE = 0;
-    
-    //Head::GetInstance()->MoveByAngle(0, 0); //move head by angle pan and tilt
-}
-
-void adjustWalkLeft()
-{
-    Walking::GetInstance()->X_OFFSET = -11.0;
-    Walking::GetInstance()->Y_OFFSET = 0.0;
-    Walking::GetInstance()->Z_OFFSET = 40.0;
-    Walking::GetInstance()->R_OFFSET = 0;
-    Walking::GetInstance()->P_OFFSET = 0;
-    Walking::GetInstance()->A_OFFSET = -2;
-    Walking::GetInstance()->HIP_PITCH_OFFSET = 15.3;
-    Walking::GetInstance()->PERIOD_TIME = 625.0;
-    Walking::GetInstance()->DSP_RATIO = 0.1;
-    Walking::GetInstance()->STEP_FB_RATIO = 0.0;
-    Walking::GetInstance()->Z_MOVE_AMPLITUDE = 30.0;
-    Walking::GetInstance()->Y_SWAP_AMPLITUDE = 16.9;
-    Walking::GetInstance()->Z_SWAP_AMPLITUDE = 5;
-    Walking::GetInstance()->PELVIS_OFFSET = 2.3;
-    Walking::GetInstance()->ARM_SWING_GAIN = 1.5;
-    Walking::GetInstance()->BALANCE_KNEE_GAIN = 0.3;
-    Walking::GetInstance()->BALANCE_ANKLE_PITCH_GAIN = 0.9;
-    Walking::GetInstance()->BALANCE_HIP_ROLL_GAIN = 0.5;
-    Walking::GetInstance()->BALANCE_ANKLE_ROLL_GAIN = 1.0;
-    Walking::GetInstance()->P_GAIN = 32;
-    Walking::GetInstance()->I_GAIN = 0;
-    Walking::GetInstance()->D_GAIN = 0;
-    Walking::GetInstance()->X_MOVE_AMPLITUDE = -3;
-	Walking::GetInstance()->A_MOVE_AMPLITUDE = 8;
-	Walking::GetInstance()->Y_MOVE_AMPLITUDE = 0;
-    
-    //Head::GetInstance()->MoveByAngle(0, 0); //move head by angle pan and tilt
-}
-
-void adjustWalkRight()
-{
-    Walking::GetInstance()->X_OFFSET = -11.0;
-    Walking::GetInstance()->Y_OFFSET = 0.0;
-    Walking::GetInstance()->Z_OFFSET = 40.0;
-    Walking::GetInstance()->R_OFFSET = 0;
-    Walking::GetInstance()->P_OFFSET = 0;
-    Walking::GetInstance()->A_OFFSET = -2;
-    Walking::GetInstance()->HIP_PITCH_OFFSET = 15.3;
-    Walking::GetInstance()->PERIOD_TIME = 625.0;
-    Walking::GetInstance()->DSP_RATIO = 0.1;
-    Walking::GetInstance()->STEP_FB_RATIO = 0.0;
-    Walking::GetInstance()->Z_MOVE_AMPLITUDE = 30.0;
-    Walking::GetInstance()->Y_SWAP_AMPLITUDE = 16.9;
-    Walking::GetInstance()->Z_SWAP_AMPLITUDE = 5;
-    Walking::GetInstance()->PELVIS_OFFSET = 2.3;
-    Walking::GetInstance()->ARM_SWING_GAIN = 1.5;
-    Walking::GetInstance()->BALANCE_KNEE_GAIN = 0.3;
-    Walking::GetInstance()->BALANCE_ANKLE_PITCH_GAIN = 0.9;
-    Walking::GetInstance()->BALANCE_HIP_ROLL_GAIN = 0.5;
-    Walking::GetInstance()->BALANCE_ANKLE_ROLL_GAIN = 1.0;
-    Walking::GetInstance()->P_GAIN = 32;
-    Walking::GetInstance()->I_GAIN = 0;
-    Walking::GetInstance()->D_GAIN = 0;
-    Walking::GetInstance()->X_MOVE_AMPLITUDE = -3;
-	Walking::GetInstance()->A_MOVE_AMPLITUDE = -2;
-	Walking::GetInstance()->Y_MOVE_AMPLITUDE = 0;
-    
-    //Head::GetInstance()->MoveByAngle(0, 0); //move head by angle pan and tilt
-}
 
 int main(void) 
 {
 ////////////////////  Initialize Movement particles////////////////////////////
 	namedWindow("image",CV_WINDOW_AUTOSIZE);
     //obstacles
-    obstacleMap[10][12] = -1;
-    obstacleMap[8][1] = -1;
-    obstacleMap[3][9] = -1;
-    obstacleMap[14][5] = -1;
-    obstacleMap[22][7] = -1;
-    obstacleMap[5][17] = -1;
+
     
     srand(time(NULL));
-    //setParticle(0,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-    setParticle(0,14,1,0,1);
+    setParticle(0,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    //setParticle(0,14,1,0,1);
     numParticle++;
-    //setParticle(1,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-    //numParticle++;
-    //setParticle(2,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-    //numParticle++;
-    //setParticle(3,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-    //numParticle++;
-    //setParticle(4,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-    //numParticle++;
+    setParticle(1,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    numParticle++;
+    setParticle(2,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    numParticle++;
+    setParticle(3,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    numParticle++;
+    setParticle(4,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    numParticle++;
     
-    drawField();
+    drawMap();
     if(waitKey(30)>=0){}
     
     printf("%s\n", "movement init");
@@ -614,7 +591,7 @@ int main(void)
 
 		/// Main function call for detection
 		marker1 = vision.findColouredObject(vision.rawFrame, vision.threshold1Frame, Scalar(255, 0, 0), 50, 40000, 4, 7, 0.1);																		
-		//marker2 = vision.findColouredObject(vision.rawFrame, vision.threshold2Frame, Scalar(0, 255, 0), 50, 40000, 4, 7, 0.1);																					
+		//marker2 addObstacle= vision.findColouredObject(vision.rawFrame, vision.threshold2Frame, Scalar(0, 255, 0), 50, 40000, 4, 7, 0.1);																					
 		//marker3 = vision.findColouredObject(vision.rawFrame, vision.threshold3Frame, Scalar(0, 255, 0), 100, 40000, 4, 7, 0.1);
 		//char strMarker1[50];
 		//sprintf(strMarker1, "marker1: %d", marker1.z);
@@ -627,7 +604,7 @@ int main(void)
 
 		///set the callback function for any mouse event
 		setMouseCallback("Control", vision.CallBackFunc, &hsvFrame);
-		
+		setMouseCallback("image", mapCallBackFunc, 0);
 		vision.showGUI(); 
 		
 		if(waitKey(30) == 27){
@@ -667,7 +644,7 @@ int main(void)
 				cout << "Initializing body complete" << endl;
 			}
 			/// Start button pressed
-			if( StatusCheck::m_old_btn == 2 ){
+			if( StatusCheck::m_old_btn == 1 ){
 				cout << "START PROGRAM" << endl;
 				//Head::GetInstance()->MoveByAngle(0, -60); 
 			
@@ -696,7 +673,15 @@ int main(void)
 				//ball_found = tracker.ball_position.X != 0 && tracker.ball_position.Y != 0;
                 
 				Walking::GetInstance()->BALANCE_ENABLE = true;
-
+				if(marker1.x > 0)
+                {
+                    addObstacle();
+                    int step = vision.getMoveStrategy();
+                    cout << "step " << step << endl;
+                    drawMap();
+                }
+				cout << "ROBOT position " << robot.x << " " << robot.y << " " << robot.theta << endl;
+                
                 //Enter stage 1
 				if(stage1){
 					Head::GetInstance()->MoveByAngle(0, -60); 
@@ -726,50 +711,58 @@ int main(void)
 					if(rept ==8 || rept ==6 || rept ==4){
 						//adjustWalkLeft();
 						turn(-45);
-						drawField();
+						drawMap();
 					}
 					else if(rept ==7 || rept ==5 || rept ==3){
 						//adjustWalkRight();
 						turn(+45);
-						drawField();
+						drawMap();
 					}
-					else if(rept ==10 || rept ==9 || rept ==2 ||  rept ==1 || rept ==0){
+					else/*(rept ==10 || rept ==9 || rept ==2 ||  rept ==1 || rept ==0)*/{
 						//adjustWalk();
 						//difference+=5;
 						printf("HERE!!!");
 						motion();
-			            updateParticles();
-			            drawField();
-			            printMotionMap();
-			            printMotionMapDegree();
-			            printParticles();
+						distSec++;
+						
 					}
-					distSec++;
 					rept--;
 					stage2 = 1;
 					stage1 = 0;
 					
+					
 				}//stage1
 				
-				//Stage 2: Taking 10 frames and detect a feature using the vision.
+				//Stage 2: Taking 20 frames and detect a feature using the vision.
 				else if(stage2){
 					Walking::GetInstance()->Stop();
 					Walking::GetInstance()->A_MOVE_AMPLITUDE = 0;
 					cout << "STAGE 2" << endl; 
-					if( numFramesForVision < 10 ){
+					if( numFramesForVision < 2099999){
 						numFramesForVision++;    // we use 10 frames to get the average.
-						vector<string> detectedFeatures = vision.detectFeature(visionMap);
-						if( detectedFeatures.size() > 0 ) // if any feature has been detected
-							increaseNumFeatureDetected(detectedFeatures);
+						//vector<string> detectedFeatures = vision.detectFeature(visionMap);
+					
+						//if( detectedFeatures.size() > 0 ) // if any feature has been detected
+						//	increaseNumFeatureDetected(detectedFeatures);
 					}
 					else {
 						stage2 = 0;
 						stage1 = 1;
 						numFramesForVision = 0;
 						string feature = determineFeature(); // "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "TCornerAtGoalLines" 
-						cout << "Feature: " << feature << endl;
+						updateVisionMap(feature);
+						combineACTSEE();
+			            updateParticles();
+			            drawMap();
+			            
+			            //printMotionMap();
+			            //printVisionMap();
+			            //printMotionMapDegree();
+			            printParticles();
+			            clearFeatureCounter();
+			            cout << "Feature: " << feature << endl;
 					}
-					if(DEBUG) cout << "Entering Stage 3" << endl;
+					//if(DEBUG) cout << "Entering Stage 3" << endl;
 				}
 				
 				//Stage 3
@@ -798,11 +791,66 @@ int main(void)
 					if(DEBUG) cout << "Entering Stage 3" << endl;
 				
 				}
+				
+				
 			}//pressed
 		}
   }//end while Status Check for buttons
 }//end main
 
+
+
+
+////////
+/*
+    Author : Goutham
+
+    This function will add obstacle to the list of obstacles
+*/
+void addObstacle(){
+    Obstacles obs;
+    int markerX = (marker1.x) / 106.7;
+    int markerY = marker1.y / 80;
+    int rangle = atan2(2 - markerY, 4 - markerX) * 180 / PI;
+    rangle = (robot.theta) +(-1 * rangle);
+    //cout << "RANGLE " << rangle << endl; 
+    if(rangle < 0)
+    {
+		while (rangle < 0)
+			rangle += 360;
+		rangle = rangle % 360;
+	}
+	if(rangle > 360)
+	{
+		rangle = rangle % 360;
+	}
+	double theta = rangle * PI / 180;
+    cout << "Angle << " << theta  << " " << markerX << " "<< markerY<< endl; 
+    int newX = robot.x + markerX * cos(theta);
+	int newY = robot.y + markerY * sin(theta);
+	obs.x = newX;
+	obs.y = newY;
+	//cout << "NEW OBSTACLE POS " << obs.x << " " << obs.y << " "<< robot.x << " " << robot.y << endl;
+					
+	if(obs.x < 29 && obs.y < 20)
+	{
+		if(obstacles.size() == 0)
+		{
+			//cout << "NEW OBSTACLE POS " << obs.x << " " << obs.y << " "<< robot.x << " " << robot.y << endl;
+					
+			obstacles.push_back(obs);
+		}
+		bool exists = false;
+		for(int i = 0; i< obstacles.size() && !exists; i++)
+		{
+				if(obstacles.at(i).x == obs.x && obstacles.at(i).y == obs.y)
+				{
+					exists = true;
+				}
+		}
+	}
+    drawMap();
+}
 
 
 /////////////////////////////////////////////////////
@@ -835,11 +883,78 @@ string determineFeature(){
 	if( numCencirCircle > 3 ){ // since circle can only be detected when there is actually a circle. (will be no confusion with other features )
 		feature = "centreCircle";
 	} 
-	else if( numCentreTCorner >= 3 && numParallelGoalLines <= 4 && numTCornerAtGoalLines <= 4 ){ // if centreTCorner( redline) is detected without parallelLines and goal T lines. ( confusion likely to happen )
+	else if( numCentreTCorner > 4 && numParallelGoalLines <= 4 && numTCornerAtGoalLines <= 4 ){ // if centreTCorner( redline) is detected without parallelLines and goal T lines. ( confusion likely to happen )
 		feature = "centreTCorner";
 	}
 	else if( numParallelGoalLines > 4 && numTCornerAtGoalLines <= 4 && numCentreTCorner){ // if parallel lines are detected, but not goalTCorner nor centreTCorner
 		feature = "parallelGoalLines";
 	}
+    else if( numTCornerAtGoalLines >= 4 ){
+        feature = "TCornerAtGoalLines";
+    }
 	return feature;
+}
+
+
+
+//=============================================================================================
+// Author: Kyle Ahn
+//   This function simply updates the visionMap depending on the feature detected by vision so that
+//   the visionMap can be multiplied with motionMap to result in better probabilities in localisation.
+//=============================================================================================
+void updateVisionMap(string feature){
+    for( int i = 0; i < COL; i++ ) {
+		for( int j = 0; j < ROW; j++ ){
+			visionMap[i][j] = 0;
+		}
+	}
+    if( feature.compare("centreCircle") == 0){
+        for( int cols = 9; cols < 17; cols++ ){
+            for( int rows = 4; rows < 13; rows++ ){
+                visionMap[cols][rows] = 1;
+            }
+        }           
+    } 
+    else if( feature.compare("parallelGoalLines") == 0 ){
+        for( int cols = 4; cols < 6; cols++ ){
+            for( int rows = 4; rows < 12; rows++ ){
+                visionMap[cols][rows] = 1;
+            }
+        }
+        for( int cols = 21; cols < 23; cols++ ) {
+            for( int rows = 4; rows < 12; rows++ ){
+                visionMap[cols][cols] = 1;
+            }
+        }
+    }
+    else if( feature.compare("TCornerAtGoalLines") == 0 ){
+        for( int cols = 4; cols < 5; cols++ ){
+            for( int rows = 1; rows < 2; rows++ ){
+                visionMap[cols][rows] = 1;
+            }
+        }
+        for( int cols = 4; cols < 5; cols++ ){
+            for( int rows = 14; rows < 15; rows++ ){
+                visionMap[cols][rows] = 1;
+            }
+        }
+        for( int cols = 21; cols < 22; cols++ ){
+            for( int rows = 1; rows < 2; rows++ ){
+                visionMap[cols][rows] = 1;
+            }
+        }
+        for( int cols = 21; cols < 22; cols++ ){
+            for( int rows = 14; rows < 15; rows++ ){
+                visionMap[cols][rows] = 1;
+            }
+        }
+    }
+}
+
+
+void clearFeatureCounter(){
+	numParallelGoalLines = 0; // to count how many times each feature was detected in these 10 frames.
+	numCencirCircle = 0;
+	numCentreTCorner = 0;
+	numTCornerAtGoalLines = 0;
 }

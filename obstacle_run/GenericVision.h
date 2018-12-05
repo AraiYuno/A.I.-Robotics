@@ -89,7 +89,7 @@ public:
 															 int maxEdge, double flushRatio);
 													
 		vector<string> detectFeature( float (&visionMap)[28][19] );
-
+		int getMoveStrategy();
 		// For Feature detection from A1
 private:
 	Mat original, extractedImg;
@@ -107,7 +107,7 @@ private:
 	void detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines);
 	bool isLCorner(KeyLine &kl1, KeyLine &kl2);
 	void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, bool circleExists);
-	void detectTCorners(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines);
+	string detectGoalLine(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines);
 	bool isTCorner(KeyLine &kl1, KeyLine &kl2);
 
 	//Miscellaneous calculations
