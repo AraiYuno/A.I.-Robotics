@@ -498,6 +498,8 @@ int numCencirCircle = 0;
 int numCentreTCorner = 0;
 int numTCornerAtGoalLines = 0;
 int numSingleLine = 0;
+bool needsVisionAngle = false;
+string globalFeature = "";
 Point3i marker1;
 Point3i marker2;
 Point3i marker3;
@@ -763,7 +765,7 @@ int main(void)
 						gettimeofday(&b, 0); 
 						difference = b.tv_sec - a.tv_sec; 
 						//adjustWalk();
-						if(rept ==8 || rept ==6 || rept ==4)
+						if(rept == 8 || rept ==6 || rept ==4)
 							adjustWalkLeft();
 						else if(rept ==7 || rept ==5 || rept ==3){
 							adjustWalkRight();
@@ -804,19 +806,22 @@ int main(void)
 					Walking::GetInstance()->Stop();
 					Walking::GetInstance()->A_MOVE_AMPLITUDE = 0;
 					cout << "STAGE 2" << endl; 
-					if( numFramesForVision < 20){
+					if( numFramesForVision < 20 && !needsVisionAngle){
 						numFramesForVision++;    // we use 10 frames to get the average.
 						vector<string> detectedFeatures = vision.detectFeature(visionMap);
 					
 						if( detectedFeatures.size() > 0 ) // if any feature has been detected
 							increaseNumFeatureDetected(detectedFeatures);
 					}
-					else {
-						stage2 = 0;
-						stage1 = 1;
+					else if(!needsVisionAngle) {
 						numFramesForVision = 0;
-						string feature = determineFeature(); // "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "TCornerAtGoalLines", or "singleLine"
-						updateVisionMap(feature);
+						globalFeature = determineFeature(); // "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "TCornerAtGoalLines", or "singleLine"
+						updateVisionMap(globalFeature);
+                        needsVisionAngle = (globalFeature.compare("centreCircle") == 0) ? true : false;
+                        if( !needsVisionAngle ){
+                            stage1 = true;
+                            stage2 = false;
+                        }
 						combineACTSEE();
 			            updateParticles();
 			            drawMap();
@@ -826,9 +831,21 @@ int main(void)
 			            //printMotionMapDegree();
 			            printParticles();
 			            clearFeatureCounter();
-			            cout << "Feature: " << feature << endl;
+			            cout << "Feature: " << globalFeature << endl;
 					}
-					//if(DEBUG) cout << "Entering Stage 3" << endl;
+					
+                    // when a feature is found(visionMap is found based on the feature), then we need to calculate visionMapDegree 
+                    if( needsVisionAngle ){
+                        float visionAngle = vision.getVisionAngle(globalFeature); // if -9999 is returned, this means that the curr frame wasn't able to detect the assigned globalFeature
+                        if( visionAngle != -9999 ){
+                            updateVisionMapDegree(globalFeature, visionAngle);
+                            needsVisionAngle = false;
+                            stage1 = true;
+                            stage2 = false;
+                            globalFeature = "";
+                            cout << "VisionAngle: " << visionAngle << endl;
+                        }
+                    }
 				}
 				
 				//Stage 3
@@ -998,37 +1015,64 @@ void updateVisionMap(string feature){
         }           
     } 
     else if( feature.compare("parallelGoalLines") == 0 ){
-        for( int cols = 4; cols < 6; cols++ ){
+        for( int cols = 2; cols < 6; cols++ ){
             for( int rows = 4; rows < 12; rows++ ){
                 visionMap[cols][rows] = 1;
             }
         }
-        for( int cols = 21; cols < 23; cols++ ) {
+        for( int cols = 21; cols < 25; cols++ ) {
             for( int rows = 4; rows < 12; rows++ ){
                 visionMap[cols][cols] = 1;
             }
         }
     }
     else if( feature.compare("TCornerAtGoalLines") == 0 ){
-        for( int cols = 4; cols < 5; cols++ ){
-            for( int rows = 1; rows < 2; rows++ ){
+        for( int cols = 3; cols < 6; cols++ ){
+            for( int rows = 1; rows < 4; rows++ ){
+                visionMap[cols][rows] = 1;
+            }
+            for( int rows = 13; rows < 16; rows++ ){
                 visionMap[cols][rows] = 1;
             }
         }
-        for( int cols = 4; cols < 5; cols++ ){
-            for( int rows = 14; rows < 15; rows++ ){
+        for( int cols = 21; cols < 24; cols++ ){
+            for( int rows = 1; rows < 4; rows++ ){
+                visionMap[cols][rows] = 1;
+            }
+            for( int rows = 13; rows < 16; rows++ ){
                 visionMap[cols][rows] = 1;
             }
         }
-        for( int cols = 21; cols < 22; cols++ ){
-            for( int rows = 1; rows < 2; rows++ ){
-                visionMap[cols][rows] = 1;
+        
+        for( int cols = 11; cols < 17; cols++ ){
+            for( int rows = 0; rows < 5; rows++ )
+                visionMap[cols][rows] = 0.5;
+            for( int rows = 14; rows < 18; rows++ )
+                visionMap[cols][rows] = 0.5;
+        }
+    }
+    else if( feature.compare("centreTCorner") == 0 ){
+        for( int cols = 3; cols < 6; cols++ ){
+            for( int rows = 1; rows < 4; rows++ ){
+                visionMap[cols][rows] = 0.5;
+            }
+            for( int rows = 13; rows < 16; rows++ ){
+                visionMap[cols][rows] = 0.5;
             }
         }
-        for( int cols = 21; cols < 22; cols++ ){
-            for( int rows = 14; rows < 15; rows++ ){
-                visionMap[cols][rows] = 1;
+        for( int cols = 21; cols < 24; cols++ ){
+            for( int rows = 1; rows < 4; rows++ ){
+                visionMap[cols][rows] = 0.5;
             }
+            for( int rows = 13; rows < 16; rows++ ){
+                visionMap[cols][rows] = 0.5;
+            }
+        }
+        for( int cols = 11; cols < 17; cols++ ){
+            for( int rows = 0; rows < 5; rows++ )
+                visionMap[cols][rows] = 1;
+            for( int rows = 14; rows < 18; rows++ )
+                visionMap[cols][rows] = 1;
         }
     }
 }

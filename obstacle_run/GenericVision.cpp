@@ -718,31 +718,70 @@ int GenericVision::getMoveStrategy()
 //   localisation is implemented.
 //======================================================================================
 vector<string> GenericVision::detectFeature( float (&visionMap)[28][19]){
+	vector<string> detectedFeatures = drawField();
+	return detectedFeatures;
+}
+
+
+//======================================================================================
+// Author: Kyle Ahn
+//   This function takes in a feature as a parameter, and calculates the angle of the featue
+//   in respect to the robot's vision.
+//======================================================================================
+float GenericVision::getVisionAngle(string feature){
+	float angle = -9999;
+	if( feature.compare("centreCircle") == 0 ){
+		Mat img = preprocessImgForLSD();
+		std::vector<KeyLine> keyLines, mergedLines, centreLines, centreCircleLines;
+		getLineSegments(img, keyLines);
+		cleanUpLines(keyLines, mergedLines);
+		detectCentreCircleLines( mergedLines, centreCircleLines );
+		// If there exists a centre circle, we then try to detect the centreCircle line.
+		if( centreCircleLines.size() > 5 ){
+			detectCentreLine( mergedLines, centreLines, true );
+			if( centreLines.size() > 0 ){
+				KeyLine defaultLine;
+				defaultLine.startPointX = 0; defaultLine.startPointY = 299; defaultLine.endPointX = 299; defaultLine.endPointY = 299;
+				angle = calcAngleBetweenTwoLines( defaultLine, centreLines[0]);
+			}
+		} 
+	}
+	return angle;
+}
+
+
+//========================================================================================
+// Author: Kyle Ahn
+//   preprocess the rawFrame by extracting only the green soccer field so that LSD can be
+//   properly done on white lines.
+//========================================================================================
+Mat GenericVision::preprocessImgForLSD(){
+	//Preprocess the mat for LSD---------------------------------
 	Mat field;
 	original = rawFrame.clone();
 	extractedImg = original.clone(); 
 	resize(original, original, Size(300,300), 0,0,1);
 	resize(extractedImg, extractedImg, Size(300,300), 0,0,1);
 	extractField(extractedImg, field);
-	//cout << "Before drawfield ExtractField" << endl;
-	vector<string> detectedFeatures = drawField(field);
-	//cout << "After drawField" << endl;
 	imshow("Field Control",field);
-	return detectedFeatures;
+	//------------------------------------------------------------
+
+	//Setup the line control and img for LSD---------------------
+	setupLineControlUI();
+	medianBlur(field, field, 5);
+	Mat cann, img;
+	inRange(field, cv::Scalar(line_h_Low, line_s_Low, line_v_Low), cv::Scalar(line_h_High, line_s_High, line_v_High), cann);
+	bitwise_not ( cann, img );
+	imshow("Line Control", img);
+	resize(img, img, Size(300,300),0,0,CV_INTER_LINEAR);
+	Mat mask = Mat::ones( img.size(), CV_8UC1 );
+	return img;
 }
-
-
-void GenericVision::calcVisionMap(float (&visionMap)[28][19]){
-
-}
-
-void GenericVision::calcVisionMapDegree(int (&visionMapDegree)[28][19]){
-}
-
 
 
 //==========================================================================================
-// Helper functions for feature detection of A1
+// Author: Kyle Ahn
+//   Helper functions for feature detection 
 //==========================================================================================
 void GenericVision::extractField(Mat &img, Mat &field)
 {
@@ -773,38 +812,16 @@ void GenericVision::extractField(Mat &img, Mat &field)
 
 
 
-vector<string> GenericVision::drawField(Mat &hsv_img){
-	setupLineControlUI();
-	medianBlur(hsv_img, hsv_img, 5);
-	Mat cann, img;
-	inRange(hsv_img, cv::Scalar(line_h_Low, line_s_Low, line_v_Low), cv::Scalar(line_h_High, line_s_High, line_v_High), cann);
-	bitwise_not ( cann, img );
-	imshow("Line Control", img);
-	resize(img, img, Size(300,300),0,0,CV_INTER_LINEAR);
-	Mat mask = Mat::ones( img.size(), CV_8UC1 );
-	Ptr<LineSegmentDetector> ls = createLineSegmentDetector(LSD_REFINE_STD);
-	    // Detect the lines
-	vector<Vec4f> lines_std;
+vector<string> GenericVision::drawField(){
+	Mat1i img = preprocessImgForLSD();
 	std::vector<KeyLine> keyLines;
-    ls->detect(img, lines_std);
-	// convert all the vec4f to KeyLine for calculation convenience.
-	for(int i = 0; i < lines_std.size(); i++)
-	{
-		KeyLine key = KeyLine();
-		Vec4f vec = lines_std[i];
-		key.startPointX = vec[0];
-		key.startPointY = vec[1];
-		key.endPointX =  vec[2];
-		key.endPointY = vec[3];
-		keyLines.push_back(key);
-	}
+    getLineSegments(img, keyLines);
 
-	// sort the lines by x in ascending order using startPointX
-	vector<string> detectedFeatures;
-	sortKeyLines(keyLines);
 	cv::Mat output = img.clone();
 	if( output.channels() == 1 )
 		cvtColor( output, output, COLOR_GRAY2BGR );
+
+	vector<string> detectedFeatures;
 	vector<KeyLine> mergedLines, goalLines, tCornerLCornerLines, normalLines, centreLine, centreCircleLines, singleLine, noShortLines;
 	cleanUpLines( keyLines, mergedLines);
 
@@ -851,6 +868,33 @@ vector<string> GenericVision::drawField(Mat &hsv_img){
 	imshow("LSD", output);
 	return detectedFeatures;
 }
+
+
+
+//============================================================================================
+// Author: Kyle Ahn
+//   simply does LSD operation, and stores the KeyLine(line segments) in the &keyLines ptr.
+//=============================================================================================
+void GenericVision::getLineSegments(Mat &img, vector<KeyLine> &keyLines){
+	Ptr<LineSegmentDetector> ls = createLineSegmentDetector(LSD_REFINE_STD);
+	    // Detect the lines
+	vector<Vec4f> lines_std;
+    ls->detect(img, lines_std);
+	// convert all the vec4f to KeyLine for calculation convenience.
+	for(int i = 0; i < lines_std.size(); i++)
+	{
+		KeyLine key = KeyLine();
+		Vec4f vec = lines_std[i];
+		key.startPointX = vec[0];
+		key.startPointY = vec[1];
+		key.endPointX =  vec[2];
+		key.endPointY = vec[3];
+		keyLines.push_back(key);
+	}
+	// sort the lines by x in ascending order using startPointX
+	sortKeyLines(keyLines);
+}
+
 
 
 

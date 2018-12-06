@@ -89,14 +89,15 @@ public:
 															 int maxEdge, double flushRatio);
 													
 		vector<string> detectFeature( float (&visionMap)[28][19] );
+		float getVisionAngle(string feature);
 		int getMoveStrategy();
 		// For Feature detection from A1
 private:
 	Mat original, extractedImg;
-	void calcVisionMap(float (&visionMap)[28][19]);
-	void calcVisionMapDegree(int (&visionMapDegree)[28][19]);
+	Mat preprocessImgForLSD();
 	void extractField(Mat &img, Mat &field);
-	vector<string> drawField(Mat &hsv_img);
+	vector<string> drawField();
+	void getLineSegments(Mat &img, vector<KeyLine> &keyLines);
 	void cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &mergedLines);
 	void drawLines( Mat &output, vector<KeyLine> &keyLines, int colour);
 	void drawCentreCircle( Mat &output, vector<KeyLine> centreCircleLines );
