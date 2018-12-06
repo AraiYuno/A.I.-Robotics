@@ -911,7 +911,10 @@ vector<string> GenericVision::drawField(){
 		if( centreLine.size() >= 1 )
 			detectedFeatures.push_back("centreTCorner");	
 
-		string goalLineFeature = detectGoalLine( mergedLines, goalLines, normalLines ); // detect a goalLine feature
+		// string goalLineFeature = detectGoalLine( mergedLines, goalLines, normalLines ); // detect a goalLine feature
+		// if( goalLineFeature.compare("") != 0 )
+		// 	detectedFeatures.push_back(goalLineFeature);
+		string goalLineFeature = detectLCorners(mergedLines, goalLines);
 		if( goalLineFeature.compare("") != 0 )
 			detectedFeatures.push_back(goalLineFeature);
 
@@ -1200,7 +1203,8 @@ void GenericVision::detectCentreCircleLines(vector<KeyLine> &lines, vector<KeyLi
 
 
 /* Summary: detectLCorners detect all the L corners using intersection points, and distance between extremes. */
-void GenericVision::detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines){
+string GenericVision::detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines){
+	string feature = "";
 	int linesSize = lines.size();
 	for( int i = 0; i < linesSize - 1; i++ ){
 		KeyLine mainLine = lines[i];
@@ -1209,10 +1213,12 @@ void GenericVision::detectLCorners(vector<KeyLine> lines, vector<KeyLine> &corne
 			if( isLCorner( mainLine, toCompare ) ){
 				cornerLines.push_back(mainLine);
 				cornerLines.push_back(toCompare);
+				feature = "goalLineLCorner";
 				break;
 			}
 		}
 	}
+	return feature;
 }
 
 
