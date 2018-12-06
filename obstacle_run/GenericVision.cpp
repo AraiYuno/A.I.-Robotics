@@ -735,32 +735,28 @@ int GenericVision::getMoveStrategy()
 
 Point3i GenericVision::getYPiller()
 {
-	cout << "start"<< endl;
 	int maxY = 0;
 	int sumX = 0;
-	int numX = 0;
+	int numX = 1;
 	int conYNum = 0;
 	for(int y = 0; y < this->threshold1Frame.rows; y++)
 	{
 		for(int x = 0; x < this->threshold1Frame.cols; x++)
 		{
 			
-				if(threshold1Frame.at<uchar>(y,x) > 0  && y>maxY){
+				if(threshold1Frame.at<uchar>(y,x) != 0  && y>maxY){
 					if(conYNum>5){
 						maxY = y;
 						conYNum = 0;
 					}
 					conYNum++;
 				}
-				if(threshold1Frame.at<uchar>(y,x) >0){
+				if(threshold1Frame.at<uchar>(y,x) != 0){
 					sumX += x;
 					numX++;
 				}
 		}	
 	}
-	
-	//printf("sumX: %d  numX: %d  ", sumX,numX);
-	printf("avgX, y: %d,%d\n",sumX/numX,maxY);
 	return Point3i(sumX/numX, maxY, 0);
 }
 
@@ -903,20 +899,20 @@ vector<string> GenericVision::drawField(){
 	} // If there isn't a centre circle line, then we try to detect other features such as "centreTCorner, "goalLine", or "singleLine""
 	else {
 		for( int i = 0; i < mergedLines.size(); i++ ){
-		if( calcLineLength(mergedLines[i]) > 60 )
-			noShortLines.push_back(mergedLines[i]);
+			if( calcLineLength(mergedLines[i]) > 60 )
+				noShortLines.push_back(mergedLines[i]);
 		}
 		mergedLines = noShortLines;
 		detectCentreLine( mergedLines, centreLine, false ); // detect a centreTCorner
 		if( centreLine.size() >= 1 )
 			detectedFeatures.push_back("centreTCorner");	
 
-		// string goalLineFeature = detectGoalLine( mergedLines, goalLines, normalLines ); // detect a goalLine feature
-		// if( goalLineFeature.compare("") != 0 )
-		// 	detectedFeatures.push_back(goalLineFeature);
-		string goalLineFeature = detectLCorners(mergedLines, goalLines);
-		if( goalLineFeature.compare("") != 0 )
-			detectedFeatures.push_back(goalLineFeature);
+		string goalLineFeature = detectGoalLine( mergedLines, goalLines, normalLines ); // detect a goalLine feature
+			if( goalLineFeature.compare("") != 0 )
+				detectedFeatures.push_back(goalLineFeature);
+		//string goalLineFeature = detectLCorners(mergedLines, goalLines);
+		//if( goalLineFeature.compare("") != 0 )
+		//	detectedFeatures.push_back(goalLineFeature);
 
 		if( centreLine.size() < 1 && goalLineFeature.compare("") == 0){	 // if No features are detected, try detecting a single line
 			detectSingleLine( mergedLines, singleLine);

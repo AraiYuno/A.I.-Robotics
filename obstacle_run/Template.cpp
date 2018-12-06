@@ -75,21 +75,10 @@ struct PointXY
 };
 
 
-////////////////////////////////////////////////////////
-///////////////// VISION ///////////////////////////////
-////////////////////////////////////////////////////////
-// Prototype functions for vision part. Implementation at the bottom
-void increaseNumFeatureDetected(vector<string> detectedFeatures);
-string determineFeature();
-void updateVisionMap(string feature);
-void updateVisionMapDegree(string feature, float angle);
-void clearFeatureCounter();
-void mapCallBackFunc(int event, int x, int y, int flags, void *userdata);
-
-
 //----------------------------------------------------------------------------------------------------------------
 // Hard coded vision map. Will be used depending on the feature detected.
 //----------------------------------------------------------------------------------------------------------------
+//  84 X 57??
 float goalLineLCornerMap[COL][ROW] = {   
     //  0    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16   17   18
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0},//0
@@ -352,16 +341,29 @@ int centreTCornerMapDegree[COL][ROW] =
 //----------------------------------------------------------------------------------------------------------------
 
 
+
+////////////////////////////////////////////////////////
+///////////////// VISION ///////////////////////////////
+////////////////////////////////////////////////////////
+// Prototype functions for vision part. Implementation at the bottom
+void increaseNumFeatureDetected(vector<string> detectedFeatures);
+string determineFeature();
+void updateVisionMap(string feature);
+void updateVisionMapDegree(string feature, float angle);
+void clearFeatureCounter();
+void mapCallBackFunc(int event, int x, int y, int flags, void *userdata);
+
+
 #define PI 3.14159265358979323846
 int testbit = 1;
+int initRandom = 0;
 int testobx;
 int testoby;
 
-//  84 X 57??
-const int COL = 28;
-const int ROW = 19;
 vector<PointXY> obstacles;
 MyRobot robot;
+
+int gridMap[COL][ROW];
 
 int particles[5][3];
 float particleProb[5];
@@ -381,18 +383,51 @@ void adjustDegree();
 void addObstacle();
 
 
-////////////////////////////////////////////////////////
-///////////////// VISION ///////////////////////////////
-////////////////////////////////////////////////////////
-// Prototype functions for vision part. Implementation at the bottom
-void increaseNumFeatureDetected(vector<string> detectedFeatures);
-string determineFeature();
-
 ///////////////////////////////////////////////////////
 ///////////////// Motion ///////////////////////////
 ///////////////////////////////////////////////////////
 
+void drawVision()
+{
+    //triangle coordinate offset
+    int x1,x2,x3,y1,y2,y3,fx1,fx2,fx3,fy1,fy2,fy3;
 
+    Mat field = imread("./soccer_field.png",CV_LOAD_IMAGE_COLOR);
+    for(int row = 0; row < ROW; row++){
+        for(int col=0; col < COL; col++){
+            if(visionMap[col][row] > 0){
+                int pX = col;
+                int pY = row;
+                int pD = visionMapDegree[col][row];
+                x1 = 0;
+                y1 = 10;
+                x2 = -5;
+                y2 = -10;
+                x3 = 5;
+                y3 = -10;
+
+                //rotation by degree (add 0.5 for proper rounding)
+                fx1 = x1*cos(pD*PI/180) - y1*sin(pD*PI/180) + 0.5;
+                fy1 = x1*sin(pD*PI/180) + y1*cos(pD*PI/180) + 0.5;
+                fx2 = x2*cos(pD*PI/180) - y2*sin(pD*PI/180) + 0.5;
+                fy2 = x2*sin(pD*PI/180) + y2*cos(pD*PI/180) + 0.5;
+                fx3 = x3*cos(pD*PI/180) - y3*sin(pD*PI/180) + 0.5;
+                fy3 = x3*sin(pD*PI/180) + y3*cos(pD*PI/180) + 0.5;
+
+                //add rotated offset
+                Point triPoints[3];
+                triPoints[0] = Point(pX*30+15 + fx1,pY*30+15 + fy1);
+                triPoints[1] = Point(pX*30+15 + fx2,pY*30+15 + fy2);
+                triPoints[2] = Point(pX*30+15 + fx3,pY*30+15 + fy3);
+                const Point* ppt[1] = { triPoints };
+                int npt[] = { 3 };
+                fillPoly(field, ppt, npt, 1, Scalar(0, 0, 255), 8);
+            }
+        }
+    }
+
+    imshow("imageVision", field);
+}
 
 float normDist[3][3] = 
 {
@@ -420,6 +455,15 @@ int globalMapSum(){
 	for(int i=0; i<ROW; i++){
         for(int j = 0; j<COL; j++)
             summ += globalMap[i][j];
+    }
+    return summ;
+}
+
+int motionMapSum(){
+	int summ = 0;
+	for(int i=0; i<ROW; i++){
+        for(int j = 0; j<COL; j++)
+            summ += motionMap[i][j];
     }
     return summ;
 }
@@ -462,7 +506,7 @@ void drawMap()
         circle(field, Point(obstacles.at(i).x * 30+15, obstacles.at(i).y * 30+15), 15, Scalar(255,0,255), -1);
     }
     
-    circle(field, Point(testobx * 30+15, testoby * 30+15), 15, Scalar(255,255,0), -1);
+    //circle(field, Point(testobx * 30+15, testoby * 30+15), 15, Scalar(255,255,0), -1);
 
     //robot location(draw triangle)
     updateRobotCoord();
@@ -493,7 +537,7 @@ void drawMap()
     const Point* ppt[1] = { triPoints };
     int npt[] = { 3 };
     fillPoly(field, ppt, npt, 1, Scalar(0, 0, 255), 8);
-
+	/*
     //draw other patricle smaller
     for(int i=0;i<numParticle;i++){
         int pX = particles[i][0];
@@ -523,6 +567,7 @@ void drawMap()
         int npt[] = { 3 };
         fillPoly(field, ppt, npt, 1, Scalar(0, 0, 255), 8);
     }
+    * */
     imshow("image", field);
 }
 
@@ -562,7 +607,6 @@ void turn(int deg){
 void motion(){
 
     cleanMotionMap();
-    printf("HERE!!!1");
     for(int i=0; i<numParticle; i++){
         float particleW = particleProb[i];
         int curX = particles[i][0];
@@ -606,7 +650,7 @@ void updateParticles(){
     for (int i = 0; i < COL; ++i) {
         for (int j = 0; j < ROW; ++j){
             if(globalMap[i][j]>0)
-                pq.push(Tuple(motionMap[i][j], i, j));
+                pq.push(Tuple(globalMap[i][j], i, j));
         }
     }
     int top = 5; // number of indices we need
@@ -620,23 +664,28 @@ void updateParticles(){
         setParticle(i,kix,kiy,globalMapDegree[kix][kiy],kip);
         numParticle++;
     }
-    if(numParticle>0)
-		normalizeParticle();
-	else{
-		//randomParticleVision();
-		
-		
-		setParticle(0,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-		numParticle++;
-		setParticle(1,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-		numParticle++;
-		setParticle(2,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-		numParticle++;
-		setParticle(3,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-		numParticle++;
-		setParticle(4,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-		numParticle++;
-	}
+}
+
+void updateParticlesMotion(){
+    std::priority_queue<Tuple> pq;
+    for (int i = 0; i < COL; ++i) {
+        for (int j = 0; j < ROW; ++j){
+            if(motionMap[i][j]>0)
+                pq.push(Tuple(motionMap[i][j], i, j));
+        }
+    }
+    int top = 5; // number of indices we need
+    numParticle = 0;
+    for (int i = 0; i < top && !pq.empty(); ++i) {
+        float kip = pq.top().pd;
+        int kix = pq.top().x;
+        int kiy = pq.top().y;
+        pq.pop();
+
+        setParticle(i,kix,kiy,motionMapDegree[kix][kiy],kip);
+        numParticle++;
+    }
+    normalizeParticle();
 }
 
 void printParticles(){
@@ -648,7 +697,7 @@ void combineACTSEE(){
     for(int i = 0; i < COL; i++){
         for(int j = 0; j < ROW; j++){
             globalMap[i][j] = motionMap[i][j] * visionMap[i][j];
-            globalMapDegree[i][j] = motionMapDegree[i][j] * visionMapDegree[i][j];
+            globalMapDegree[i][j] = visionMapDegree[i][j];
         }
     }
 }
@@ -676,21 +725,15 @@ void randomParticleVision(){
                 particles[i][1] = y;
 
                 //OR USE DEGREE FROM VISION MAP
-                //particles[i][2] = visionMapDegree[x][y];
+                particles[i][2] = visionMapDegree[x][y];
 
                 //OR RANDOM DEGREE
-                particles[i][2] = (rand() % static_cast<int>(360));
+                //particles[i][2] = (rand() % static_cast<int>(360));
             }
         }
         particleProb[i] = 0.2;
     }
     numParticle = 5;
-
-    printf("x,y,t = (%d,%d,%d)\n", particles[0][0],particles[0][1],particles[0][2]);
-    printf("x,y,t = (%d,%d,%d)\n", particles[1][0],particles[1][1],particles[1][2]);
-    printf("x,y,t = (%d,%d,%d)\n", particles[2][0],particles[2][1],particles[2][2]);
-    printf("x,y,t = (%d,%d,%d)\n", particles[3][0],particles[3][1],particles[3][2]);
-    printf("x,y,t = (%d,%d,%d)\n", particles[4][0],particles[4][1],particles[4][2]);
 }
 
 PointXY obstacleXYScreen(int botX, int botY, int botOri, int screenX, int screenY){
@@ -832,12 +875,14 @@ int main(void)
 {
 ////////////////////  Initialize Movement particles////////////////////////////
 	namedWindow("image",CV_WINDOW_AUTOSIZE);
+	namedWindow("imageVision",CV_WINDOW_AUTOSIZE);
     //obstacles
 
     
     srand(time(NULL));
-    //setParticle(0,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-    setParticle(0,6,10,0,90.2);
+    /*
+    setParticle(0,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    
     numParticle++;
     setParticle(1,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
     numParticle++;
@@ -847,7 +892,7 @@ int main(void)
     numParticle++;
     setParticle(4,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
     numParticle++;
-    
+    */
     drawMap();
     if(waitKey(30)>=0){}
     
@@ -947,7 +992,7 @@ int main(void)
 		
 
 		/// Main function call for detection
-		marker1 = vision.findColouredObject(vision.rawFrame, vision.threshold1Frame, Scalar(255, 0, 0), 50, 40000, 4, 7, 0.1);																		
+		marker1 = vision.findColouredObject(vision.rawFrame, vision.threshold1Frame, Scalar(255, 0, 0), 30, 70000, 4, 7, 0.05);																		
 		//marker2 addObstacle= vision.findColouredObject(vision.rawFrame, vision.threshold2Frame, Scalar(0, 255, 0), 50, 40000, 4, 7, 0.1);																					
 		//marker3 = vision.findColouredObject(vision.rawFrame, vision.threshold3Frame, Scalar(0, 255, 0), 100, 40000, 4, 7, 0.1);
 		//char strMarker1[50];
@@ -1132,7 +1177,7 @@ int main(void)
                     if( needsVisionAngle ){
                         float visionAngle = vision.getVisionAngle(globalFeature); // if -9999 is returned, this means that the curr frame wasn't able to detect the assigned globalFeature
                         if( visionAngle != -9999 ){
-                            updateVisionMapDegree(globalFeature, visionAngle);
+                            //updateVisionMapDegree(globalFeature, visionAngle);
                             needsVisionAngle = false;
                             stage1 = true;
                             stage2 = false;
@@ -1184,11 +1229,11 @@ int main(void)
 					}
 					else if(!needsVisionAngle) {
 						numFramesForVision = 0;
-						globalFeature = determineFeature(); // "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "goalLineLCorner", or "singleLine"
+						globalFeature = determineFeature(); // "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "TCornerAtGoalLines", or "singleLine"
 						updateVisionMap(globalFeature);
                         needsVisionAngle = (globalFeature.compare("centreCircle") == 0 || globalFeature.compare("singleLine") == 0) ? true : false;
                         if( !needsVisionAngle ){
-							//updateVisionMapDegree(default);
+							updateVisionMapDegree(globalFeature, 0);
                             stage1 = false;
                             stage2 = true;
                         }
@@ -1199,43 +1244,36 @@ int main(void)
                     if( needsVisionAngle ){
                         globalVisionAngle = vision.getVisionAngle(globalFeature); // if -9999 is returned, this means that the curr frame wasn't able to detect the assigned globalFeature
                         if( globalVisionAngle != -9999 ){
-                            //updateVisionMapDegree(globalFeature, visionAngle);
+                            updateVisionMapDegree(globalFeature, globalVisionAngle);
                             needsVisionAngle = false;
                             stage1 = false;
                             stage2 = true;
-                            //updateVisionMapDegree(globalFeature, angle);
                             cout << "VisionAngle: " << globalVisionAngle << endl;
-                            
                             // Here visionMap and visionMapDegree are both ready!
                         }
                     } 
 				}
 				else if(stage2){
-					
+					drawVision();
 					combineACTSEE();
-					updateParticles();
 					drawMap();
-					
-					//printMotionMap();
-					//printVisionMap();
-					//printMotionMapDegree();
-					printParticles();
 					clearFeatureCounter();
 					cout << "Feature1: " << globalFeature << endl;
 					//globalVisionAngle = vision.getVisionAngle(globalFeature);
 					//Sees nothing and no motion prob then, create random particles
-					if(globalFeature.compare("No Features")==0 && globalMapSum() ==0){
+					if(initRandom==0){
 						randomParticlesInit();
+						initRandom = 1;
 					}
 					
 					//if see something and no motion prob then, create particle with in possible vision area
-					else if(globalFeature.compare("No Features")!=0 && globalMapSum() ==0){
+					else if(globalFeature.compare("centreCircle")==0 && globalMapSum() ==0){
 						cout << "Vision"<< endl;
-						//randomParticleVision();
+						randomParticleVision();
 					}
 					
 					// contiue with existing prob
-					else{
+					else if(globalMapSum() !=0){
 						cout << "updateParticle"<< endl;
 						updateParticles();
 					}
@@ -1247,21 +1285,28 @@ int main(void)
 					//printMotionMapDegree();
 					printParticles();
 			
-					
+					PointXY newObs1 = obstacleXYScreen(robot.x, robot.y, robot.theta, 100, 70);
+                    PointXY newObs2 = obstacleXYScreen(robot.x, robot.y, robot.theta, 150, 70);
+                    PointXY newObs3 = obstacleXYScreen(robot.x, robot.y, robot.theta, 230, 70);
+                    PointXY newObs4 = obstacleXYScreen(robot.x, robot.y, robot.theta, 100, 90);
+                    PointXY newObs5 = obstacleXYScreen(robot.x, robot.y, robot.theta, 150, 90);
+                    PointXY newObs6 = obstacleXYScreen(robot.x, robot.y, robot.theta, 230, 90);
 					//map the obstacle if see
                     if(marker1.x > 0)
                     {
-                        int xIn = marker1.x;
-                        int yIn = marker1.y+25;
-                        if(yIn > 240)
-                            yIn = 240;
-                        PointXY newObs = obstacleXYScreen(robot.x, robot.y, robot.theta, xIn, yIn);
-                        cout << "obs " << xIn << " " <<yIn << endl;
+
+                        Point3i pos = vision.getYPiller() ;
+                            
+                        PointXY newObs = obstacleXYScreen(robot.x, robot.y, robot.theta, pos.x, pos.y);
+                        cout << "obs " << newObs.x << " " <<newObs.y << endl;
                         bool exists = false;
                         //mark obstacle if see that
                         if(newObs.x >0 && newObs.y > 0){
-                            if(obstacles.size() > 0)
+                            if(obstacles.size() == 0)
+                            {
                                 obstacles.push_back(newObs);
+                                drawMap();
+							}
                             else
                             {
                                 for(int i = 0; i < obstacles.size() && !exists ; i++)
@@ -1274,10 +1319,44 @@ int main(void)
                                 if(!exists)
                                 {
                                     obstacles.push_back(newObs);
+                                    drawMap();
+                                    cout << "obstacle is added \n";
                                 }
                             }
                         }
                     }
+					//map the obstacle if see
+                   
+					Point3i pos = vision.getYPiller() ;
+						
+					PointXY newObs = obstacleXYScreen(robot.x, robot.y, robot.theta, pos.x, pos.y);
+					cout << "obs " << newObs.x << " " <<newObs.y << endl;
+					bool exists = false;
+					//mark obstacle if see that
+					if(newObs.x >0 && newObs.y > 0){
+						if(obstacles.size() == 0)
+						{
+							obstacles.push_back(newObs);
+							drawMap();
+						}
+						else
+						{
+							for(int i = 0; i < obstacles.size() && !exists ; i++)
+							{
+								if(obstacles.at(i).x == newObs.x&& obstacles.at(i).y == newObs.y)
+								{
+									exists = true;
+								}
+							}
+							if(!exists)
+							{
+								obstacles.push_back(newObs);
+								drawMap();
+								cout << "obstacle is added \n";
+							}
+						}
+				   }
+                    
 					
 					//decide motion given vision
 					steps = vision.getMoveStrategy();
@@ -1297,6 +1376,9 @@ int main(void)
 						{
 							steps = 4;
 						}
+					}
+					else if(globalFeature.compare("TCornerAtGoalLines") == 0){
+						steps = 5;
 					}
 					//use vision feature as well to decide
 					
@@ -1323,6 +1405,8 @@ int main(void)
 							Walking::GetInstance()->Start();
 						}
 						motion();
+						updateParticlesMotion();
+						drawMap();
 					}
                     else if(steps == 3)
                     {
@@ -1343,6 +1427,24 @@ int main(void)
                         cout << "after turn" << endl;
 						drawMap();
 						cout << "after drawmap" << endl;
+						
+                    }
+                    else if (steps == 5)
+                    {
+                        Head::GetInstance()->MoveByAngle(0, -60);
+                        timeval a, b; 
+                        int difference = 0;
+
+                        gettimeofday(&a, 0);
+
+                        while(difference <= 16){
+						    gettimeofday(&b, 0); 
+						    difference = b.tv_sec - a.tv_sec; 
+							adjustWalkRight();
+                            Walking::GetInstance()->Start();
+						}
+                        turn(+90);
+						drawMap();
 						
                     }
                     else if(steps == 4)
@@ -1448,8 +1550,8 @@ void increaseNumFeatureDetected(vector<string> detectedFeatures){
             numCencirCircle = (detectedFeatures[i].compare("centreCircle") == 0 ) ? numCencirCircle + 1 : numCencirCircle;
             numCentreTCorner = (detectedFeatures[i].compare("centreTCorner") == 0 ) ? numCentreTCorner + 1 : numCentreTCorner;
             // numParallelGoalLines = (detectedFeatures[i].compare("parallelGoalLines") == 0 ) ? numParallelGoalLines + 1 : numParallelGoalLines;
-            // numTCornerAtGoalLines = (detectedFeatures[i].compare("TCornerAtGoalLines") == 0 ) ? numTCornerAtGoalLines + 1 : numTCornerAtGoalLines;
-            numGoalLineLCorner = (detectedFeatures[i].compare("goalLineLCorner") == 0 ) ? numGoalLineLCorner + 1 : numGoalLineLCorner;
+            numTCornerAtGoalLines = (detectedFeatures[i].compare("TCornerAtGoalLines") == 0 ) ? numTCornerAtGoalLines + 1 : numTCornerAtGoalLines;
+            //numGoalLineLCorner = (detectedFeatures[i].compare("goalLineLCorner") == 0 ) ? numGoalLineLCorner + 1 : numGoalLineLCorner;
             numSingleLine = (detectedFeatures[i].compare("singleLine") == 0 ) ? numSingleLine + 1 : numSingleLine;
             if(detectedFeatures[i].compare("singleLine") == 0 )
 				cout << "numSingleLine" << numSingleLine << endl;
@@ -1472,18 +1574,17 @@ string determineFeature(){
 	else if( numCentreTCorner > 4 && numParallelGoalLines <= 4 && numTCornerAtGoalLines <= 4 ){ // if centreTCorner( redline) is detected without parallelLines and goal T lines. ( confusion likely to happen )
 		feature = "centreTCorner";
 	}
-	// else if( numParallelGoalLines > 4 && numTCornerAtGoalLines <= 4 && numCentreTCorner <= 4){ // if parallel lines are detected, but not goalTCorner nor centreTCorner
+	//else if( numParallelGoalLines > 4 && numTCornerAtGoalLines <= 4 && numCentreTCorner <= 4){ // if parallel lines are detected, but not goalTCorner nor centreTCorner
 	// 	feature = "parallelGoalLines";
-	// }
-    else if( numGoalLineLCorner >= 4 && numCentreTCorner <=4 ){
-        feature = "goalLineLCorner";
+	//}
+    else if( numTCornerAtGoalLines >= 4 && numCentreTCorner <=4 ){
+        feature = "goalLineTCorner";
     }
     else if( numSingleLine > 6 && numCencirCircle <= 4 && numCentreTCorner <= 4 && numGoalLineLCorner <= 4 ){
         feature = "singleLine";
     }
 	return feature;
 }
-
 
 
 //=============================================================================================
@@ -1504,7 +1605,7 @@ void updateVisionMap(string feature){
             }
         }           
     } 
-    else if( feature.compare("goalLineLCorner") == 0 ){
+    else if( feature.compare("goalLineTCorner") == 0 ){
         for( int cols = 0; cols < COL; cols++ ){
             for( int rows = 0; rows < ROW; rows++ ){
                 visionMap[cols][rows] = goalLineLCornerMap[cols][rows];
@@ -1518,7 +1619,7 @@ void updateVisionMap(string feature){
             }
         }      
     } 
-    else if( "centreTCorner"){
+    else if( feature.compare("centreTCorner") == 0){
         for( int cols = 0; cols < COL; cols++ ){
             for( int rows = 0; rows < ROW; rows++ ){
                 visionMap[cols][rows] = centreTCornerMap[cols][rows];
@@ -1526,7 +1627,6 @@ void updateVisionMap(string feature){
         }      
     }
 }
-
 
 
 //=====================================================================================================
@@ -1544,25 +1644,29 @@ void updateVisionMapDegree(string feature, float angle){
             for( int rows = 0; rows < ROW; rows++ ){
                 visionMapDegree[cols][rows] = centreCircleMapDegree[cols][rows];
                 if( angle < 0 ){
-                    if( centreCircleMapDegree[cols][rows] == 2 || centreCircleMapDegree[cols][rows] == 4 )
+                    if( centreCircleMapDegree[cols][rows] == 2 || centreCircleMapDegree[cols][rows] == 4 ){
                         visionMapDegree[cols][rows] = 0;
+                        visionMap[cols][rows] = 0;
+					}
                     else if( centreCircleMapDegree[cols][rows] == 1 )
-                        visionMapDegree[cols][rows] = 90 + angle 
+                        visionMapDegree[cols][rows] = 90 + angle;
                     else if( centreCircleMapDegree[cols][rows] == 3 )
                         visionMapDegree[cols][rows] = 90 + angle + 180;
                 } 
                 else {
-                    if( centreCircleMapDegree[cols][rows] == 1 || centreCircleMapDegree[cols][rows] == 3 )
+                    if( centreCircleMapDegree[cols][rows] == 1 || centreCircleMapDegree[cols][rows] == 3 ){
                         visionMapDegree[cols][rows] = 0;
+                        visionMap[cols][rows] = 0;
+					}
                     else if( centreCircleMapDegree[cols][rows] == 2 )
-                        visionMapDegree[cols][rows] = -90 + angle 
+                        visionMapDegree[cols][rows] = -90 + angle;
                     else if( centreCircleMapDegree[cols][rows] == 4 )
                         visionMapDegree[cols][rows] = -90 + angle + 180;
                 }
             }
         }      
     }
-    else if( feature.compare("goalLineLCorner") == 0 ){
+    else if( feature.compare("goalLineTCorner") == 0 ){
         for( int cols = 0; cols < COL; cols++ ){
             for( int rows = 0; rows < ROW; rows++ ){
                 visionMapDegree[cols][rows] = goalLineLCornerMapDegree[cols][rows];
@@ -1594,6 +1698,8 @@ void clearFeatureCounter(){
     numGoalLineLCorner = 0;
     numSingleLine = 0;
 }
+
+
 
 void mapCallBackFunc(int event, int x, int y, int flags, void *userdata)
 {
