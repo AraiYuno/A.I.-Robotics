@@ -160,25 +160,25 @@ void GenericVision::initGUI()
 {
 	/// GUI with trackbar
 	namedWindow("Control", CV_WINDOW_AUTOSIZE);
-	/*namedWindow("Colour1", CV_WINDOW_AUTOSIZE);
-	namedWindow("Colour2", CV_WINDOW_AUTOSIZE);
-	namedWindow("Colour3", CV_WINDOW_AUTOSIZE);
-	namedWindow("Debug", CV_WINDOW_AUTOSIZE);
+	namedWindow("Colour1", CV_WINDOW_AUTOSIZE);
+	//namedWindow("Colour2", CV_WINDOW_AUTOSIZE);
+	//namedWindow("Colour3", CV_WINDOW_AUTOSIZE);
+	//namedWindow("Debug", CV_WINDOW_AUTOSIZE);
 	createTrackbar("Marker:", "Control", &marker_xml, 3, markerTrackbarCbFunc);
 	createTrackbar("Canny Threshold (Low):", "Control", &sbCannyLow, 255);
 	createTrackbar("Canny Threshold (High):", "Control", &sbCannyHigh, 255);
 	createTrackbar("H (Gain):", "Control", &sbHSVGain[0], 60, hTrackbarCbFunc);
 	createTrackbar("S (Gain):", "Control", &sbHSVGain[1], 100, sTrackbarCbFunc);
 	createTrackbar("V (Gain):", "Control", &sbHSVGain[2], 100, vTrackbarCbFunc);
-	markerTrackbarCbFunc(0, NULL);*/
+	markerTrackbarCbFunc(0, NULL);
 }
 
 void GenericVision::showGUI()
 {
 	imshow("Control", rawFrame);
-	//imshow("Colour1", threshold1Frame);
-	// imshow("Colour2", threshold2Frame);
-	// imshow("Colour3", threshold3Frame);
+	imshow("Colour1", threshold1Frame);
+	//imshow("Colour2", threshold2Frame);
+	//imshow("Colour3", threshold3Frame);
 }
 
 /// find ball with HoughCircles 
@@ -772,15 +772,9 @@ void GenericVision::extractField(Mat &img, Mat &field)
 }
 
 
+
 vector<string> GenericVision::drawField(Mat &hsv_img){
-	namedWindow( "Line Control", CV_WINDOW_AUTOSIZE );
-	createTrackbar( "h (Low):", "Line Control", &line_h_Low, 255, updateCanny_Low);
-	createTrackbar( "h (High):", "Line Control", &line_h_High, 255, updateCanny_High);
-	createTrackbar( "s (Low):", "Line Control", &line_s_Low, 255, updateCanny_Low);
-	createTrackbar( "s (High):", "Line Control", &line_s_High, 255, updateCanny_High);
-	createTrackbar( "v (Low):", "Line Control", &line_v_Low, 255, updateCanny_Low);
-	createTrackbar( "v (High):", "Line Control", &line_v_High, 255, updateCanny_High);
-	
+	setupLineControlUI();
 	medianBlur(hsv_img, hsv_img, 5);
 	Mat cann, img;
 	inRange(hsv_img, cv::Scalar(line_h_Low, line_s_Low, line_v_Low), cv::Scalar(line_h_High, line_s_High, line_v_High), cann);
@@ -811,32 +805,46 @@ vector<string> GenericVision::drawField(Mat &hsv_img){
 	cv::Mat output = img.clone();
 	if( output.channels() == 1 )
 		cvtColor( output, output, COLOR_GRAY2BGR );
-	vector<KeyLine> mergedLines, tCornerLines, tCornerLCornerLines, normalLines, circleLineCorners, centreCircleLines;
+	vector<KeyLine> mergedLines, goalLines, tCornerLCornerLines, normalLines, centreLine, centreCircleLines, singleLine;
 	cout << "before cleanup " << endl;
 	cleanUpLines( keyLines, mergedLines);
 	cout << "after cleanup" << endl;
+
+	// First, we try to detect a centre circle
 	detectCentreCircleLines( mergedLines, centreCircleLines );
-	if( centreCircleLines.size() <= 5 ){
-		string goalLineFeature = detectGoalLine( mergedLines, tCornerLines, normalLines );
+	// If there exists a centre circle, we then try to detect the centreCircle line.
+	if( centreCircleLines.size() > 5 ){
+		detectedFeatures.push_back("centreCircle");
+		detectCircleTCorner( mergedLines, centreLine, true ); 
+		if( centreLine.size() >= 1 )
+			detectedFeatures.push_back("centreCircleLine");
+	} // If there isn't a centre circle line, then we try to detect other features such as "centreTCorner, "goalLine", or "singleLine""
+	else {
+		detectCircleTCorner( mergedLines, centreLine, false ); // detect a centreTCorner
+		if( centreLine.size() >= 1 )
+			detectedFeatures.push_back("centreTCorner");	
+
+		string goalLineFeature = detectGoalLine( mergedLines, goalLines, normalLines ); // detect a goalLine feature
 		if( goalLineFeature.compare("") != 0 )
 			detectedFeatures.push_back(goalLineFeature);
+
+		if( centreLine.size() < 1 && goalLineFeature.compare("") == 0){	 // if No features are detected, try detecting a single line
+			detectSingleLine( mergedLines, singleLine);
+			if( singleLine.size() == 1 )
+				detectedFeatures.push_back("singleLine");
+		}
 	}
-	if( centreCircleLines.size() > 5 )
-		detectCircleTCorner( mergedLines, circleLineCorners, true ); 
-	else
-		detectCircleTCorner( mergedLines, circleLineCorners, false ); 
 	drawLines(output, mergedLines, 2);
 	
 	// if there exists a centre  circle in the field, we draw a centre circle in our output.
 	// TODO: I need to be able to return a combination of different strings depending on the detected features.
 	if( centreCircleLines.size() > 5 ){
 		drawCentreCircle(output, centreCircleLines);
-		detectedFeatures.push_back("centreCircle");
 	}
-	if( tCornerLines.size() >= 1 ){
-		drawLines(output, tCornerLines, 3);
+	if( goalLines.size() >= 1 ){
+		drawLines(output, goalLines, 3);
 	}
-	drawLines(output, circleLineCorners, 0);
+	drawLines(output, centreLine, 0);
 	imshow("LSD", output);
 	return detectedFeatures;
 }
@@ -1017,6 +1025,31 @@ void GenericVision::switchStartAndEnd(KeyLine &kl){
 		kl.startPointY = kl.endPointY;
 		kl.endPointY = tempY;
 	}
+}
+
+
+// detects if there is a single long line in the frame. It must be one single line. This tells us if we need to turn around not 
+// to go out of the soccer field.
+bool GenericVision::detectSingleLine(vector<KeyLine> &lines, vector<KeyLine> &singleLine){
+	int linesSize = lines.size();
+	int countLongLines = 0;
+	float maxLength = calcLineLength(lines[0]);
+	if( maxLength > 200 ) countLongLines++;
+	KeyLine maxKeyLine = lines[0];
+	for( int i = 1; i < linesSize; i++ ){
+		int tempMaxLength = calcLineLength(lines[i]);
+		if( tempMaxLength > maxLength ){
+			maxLength = tempMaxLength;
+			maxKeyLine = lines[i];
+		}
+		if( tempMaxLength > 200 ){ // If there exists more than a single long line frame, it means that this frame does not contain only a single long line
+ 			countLongLines++;
+			if( countLongLines >= 2)
+				break;
+		}
+	}
+	if( countLongLines == 1 && maxLength > 200) singleLine.push_back(maxKeyLine);
+	return (singleLine.size() == 1 ) ? true : false;
 }
 
 
@@ -1360,4 +1393,14 @@ void GenericVision::printTwoLines(KeyLine &mainLine, KeyLine &line){
 	cout << endl;
 }
 
+
+void GenericVision::setupLineControlUI(){
+	namedWindow( "Line Control", CV_WINDOW_AUTOSIZE );
+	createTrackbar( "h (Low):", "Line Control", &line_h_Low, 255, updateCanny_Low);
+	createTrackbar( "h (High):", "Line Control", &line_h_High, 255, updateCanny_High);
+	createTrackbar( "s (Low):", "Line Control", &line_s_Low, 255, updateCanny_Low);
+	createTrackbar( "s (High):", "Line Control", &line_s_High, 255, updateCanny_High);
+	createTrackbar( "v (Low):", "Line Control", &line_v_Low, 255, updateCanny_Low);
+	createTrackbar( "v (High):", "Line Control", &line_v_High, 255, updateCanny_High);
+}
 

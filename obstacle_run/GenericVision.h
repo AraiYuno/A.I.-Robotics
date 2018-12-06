@@ -103,6 +103,7 @@ private:
 	bool areSameLines(KeyLine &kl1, KeyLine &kl2);
 	void mergeLines(KeyLine &mainLine, KeyLine &kl);
 	void switchStartAndEnd(KeyLine &kl);
+	bool detectSingleLine(vector<KeyLine> &lines, vector<KeyLine> &singleLine);
 	void detectCentreCircleLines(vector<KeyLine> &lines, vector<KeyLine> &centreCircleLines);
 	void detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines);
 	bool isLCorner(KeyLine &kl1, KeyLine &kl2);
@@ -123,6 +124,7 @@ private:
 	Point getIntersectionPoint(KeyLine &kl1, KeyLine &kl2 );
 	void printLines(std::vector<KeyLine> lines);
 	void printTwoLines(KeyLine &mainLine, KeyLine &line);
+	void setupLineControlUI();
 };
 
 #endif /* GENERICVISION_H_ */

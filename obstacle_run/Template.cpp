@@ -57,6 +57,7 @@ void updateVisionMap(string feature);
 void clearFeatureCounter();
 
 #define PI 3.14159265358979323846
+#define TEST = 1;
 
 //  84 X 57??
 const int COL = 28;
@@ -128,6 +129,17 @@ struct Tuple
     }
 };
 
+struct PointXY
+{
+    int x;
+    int y;
+
+    PointXY(int n1, int n2) : x(n1), y(n2)
+    {
+    }
+
+};
+
 
 float normDist[3][3] = 
 {
@@ -189,7 +201,7 @@ void drawMap()
     }
 
     //robot location(draw triangle)
-    //updateRobotCoord();
+    updateRobotCoord();
     //triangle coordinate offset
     int x1,x2,x3,y1,y2,y3,fx1,fx2,fx3,fy1,fy2,fy3;
 
@@ -416,6 +428,59 @@ void randomParticleVision(){
     printf("x,y,t = (%d,%d,%d)\n", particles[3][0],particles[3][1],particles[3][2]);
     printf("x,y,t = (%d,%d,%d)\n", particles[4][0],particles[4][1],particles[4][2]);
 }
+
+PointXY obstacleXYScreen(int botX, int botY, int botOri, int screenX, int screenY){
+
+    int obstacleX;
+    int obstacleY;
+    obstacleX = screenX / 80;
+    obstacleY = screenY / 106;
+
+    //printf("%d,%d\n",obstacleX,obstacleY );
+
+    int diffX = abs(screenX - 160);
+    int diffY = abs(screenY - 255);
+    int refAngle = 90 - atan((float)diffY/diffX) * 180 / PI;
+    if(screenX < 161)
+        refAngle = -refAngle;
+
+    if(obstacleX == 0)
+        obstacleX = -1;
+    else if(obstacleX == 1)
+        obstacleX = 0;
+    else if(obstacleX == 2)
+        obstacleX = 1;
+
+    if(obstacleY == 0)
+        obstacleY = 3;
+    else if(obstacleY == 1)
+        obstacleY = 2;
+    else if(obstacleY == 2)
+        obstacleY = 1;
+
+    // printf("%d,%d\n",obstacleX,obstacleY );
+
+
+    int x1,y1;
+    float fx1,fy1;
+    //vertex of triangles(when 0 degree)
+    x1 = obstacleX;
+    y1 = obstacleY;
+    //rotation by degree (add 0.5 for proper rounding)
+    fx1 = x1*cos(botOri*PI/180) - y1*sin(botOri*PI/180);
+    fy1 = x1*sin(botOri*PI/180) + y1*cos(botOri*PI/180);
+    if(fx1<0)
+        fx1-0.5;
+    else
+        fx1+0.5;
+
+    if(fy1<0)
+        fy1-0.5;
+    else
+        fy1+0.5;
+
+    return PointXY(fx1,fy1);
+}
 ///////////////////////////////////////////////////////
 ///////////////// motion END ///////////////////////////
 ///////////////////////////////////////////////////////
@@ -432,6 +497,7 @@ int numParallelGoalLines = 0; // to count how many times each feature was detect
 int numCencirCircle = 0;
 int numCentreTCorner = 0;
 int numTCornerAtGoalLines = 0;
+int numSingleLine = 0;
 Point3i marker1;
 Point3i marker2;
 Point3i marker3;
@@ -683,7 +749,7 @@ int main(void)
 				cout << "ROBOT position " << robot.x << " " << robot.y << " " << robot.theta << endl;
                 
                 //Enter stage 1
-				if(stage1){
+				if(stage1 && !TEST){
 					Head::GetInstance()->MoveByAngle(0, -60); 
 					cout << "STAGE 1: " << distSec << endl; 
 					timeval a, b; 
@@ -734,22 +800,22 @@ int main(void)
 				}//stage1
 				
 				//Stage 2: Taking 20 frames and detect a feature using the vision.
-				else if(stage2){
+				else if(stage2 && !TEST){
 					Walking::GetInstance()->Stop();
 					Walking::GetInstance()->A_MOVE_AMPLITUDE = 0;
 					cout << "STAGE 2" << endl; 
-					if( numFramesForVision < 2099999){
+					if( numFramesForVision < 20){
 						numFramesForVision++;    // we use 10 frames to get the average.
-						//vector<string> detectedFeatures = vision.detectFeature(visionMap);
+						vector<string> detectedFeatures = vision.detectFeature(visionMap);
 					
-						//if( detectedFeatures.size() > 0 ) // if any feature has been detected
-						//	increaseNumFeatureDetected(detectedFeatures);
+						if( detectedFeatures.size() > 0 ) // if any feature has been detected
+							increaseNumFeatureDetected(detectedFeatures);
 					}
 					else {
 						stage2 = 0;
 						stage1 = 1;
 						numFramesForVision = 0;
-						string feature = determineFeature(); // "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "TCornerAtGoalLines" 
+						string feature = determineFeature(); // "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "TCornerAtGoalLines", or "singleLine"
 						updateVisionMap(feature);
 						combineACTSEE();
 			            updateParticles();
@@ -766,7 +832,7 @@ int main(void)
 				}
 				
 				//Stage 3
-				else if(stage3){
+				else if(stage3 && !TEST){
 				
 					cout << "STAGE 3" << endl; 
 					
@@ -790,6 +856,11 @@ int main(void)
 
 					if(DEBUG) cout << "Entering Stage 3" << endl;
 				
+				}
+				
+				else if(stage1){
+					PointXY tempp = obstacleXYScreen(robot.x, robot.y, robot.theta, marker1.x, marker1.y);
+					printf("%d,%d\n",tempp.x, tempp.y)
 				}
 				
 				
@@ -863,12 +934,20 @@ void addObstacle(){
 //   we can eventually determine which feature is actually detected by avering 10 frames
 //=============================================================================================
 void increaseNumFeatureDetected(vector<string> detectedFeatures){
-	for( int i = 0; i < detectedFeatures.size(); i++ ){
-		numCencirCircle = (detectedFeatures[i].compare("centreCircle") == 0 ) ? numCencirCircle + 1 : numCencirCircle;
-		numCentreTCorner = (detectedFeatures[i].compare("centreTCorner") == 0 ) ? numCentreTCorner + 1 : numCentreTCorner;
-		numParallelGoalLines = (detectedFeatures[i].compare("parallelGoalLines") == 0 ) ? numParallelGoalLines + 1 : numParallelGoalLines;
-		numTCornerAtGoalLines = (detectedFeatures[i].compare("TCornerAtGoalLines") == 0 ) ? numTCornerAtGoalLines + 1 : numTCornerAtGoalLines;
-	}
+    if( detectedFeatures.size() == 0 ){
+        //numNoFeatures++;
+    } 
+    else {
+        for( int i = 0; i < detectedFeatures.size(); i++ ){
+            numCencirCircle = (detectedFeatures[i].compare("centreCircle") == 0 ) ? numCencirCircle + 1 : numCencirCircle;
+            numCentreTCorner = (detectedFeatures[i].compare("centreTCorner") == 0 ) ? numCentreTCorner + 1 : numCentreTCorner;
+            numParallelGoalLines = (detectedFeatures[i].compare("parallelGoalLines") == 0 ) ? numParallelGoalLines + 1 : numParallelGoalLines;
+            numTCornerAtGoalLines = (detectedFeatures[i].compare("TCornerAtGoalLines") == 0 ) ? numTCornerAtGoalLines + 1 : numTCornerAtGoalLines;
+            numSingleLine = (detectedFeatures[i].compare("singleLine") == 0 ) ? numSingleLine + 1 : numSingleLine;
+            if(detectedFeatures[i].compare("singleLine") == 0 )
+				cout << "numSingleLine" << numSingleLine << endl;
+    	}
+    }
 }
 
 
@@ -879,18 +958,21 @@ void increaseNumFeatureDetected(vector<string> detectedFeatures){
 //   Returns one of "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "TCornerAtGoalLines" 
 //=============================================================================================
 string determineFeature(){
-	string feature = "";
-	if( numCencirCircle > 3 ){ // since circle can only be detected when there is actually a circle. (will be no confusion with other features )
+	string feature = "No Features";
+	if( numCencirCircle > 4 ){ // since circle can only be detected when there is actually a circle. (will be no confusion with other features )
 		feature = "centreCircle";
 	} 
 	else if( numCentreTCorner > 4 && numParallelGoalLines <= 4 && numTCornerAtGoalLines <= 4 ){ // if centreTCorner( redline) is detected without parallelLines and goal T lines. ( confusion likely to happen )
 		feature = "centreTCorner";
 	}
-	else if( numParallelGoalLines > 4 && numTCornerAtGoalLines <= 4 && numCentreTCorner){ // if parallel lines are detected, but not goalTCorner nor centreTCorner
+	else if( numParallelGoalLines > 4 && numTCornerAtGoalLines <= 4 && numCentreTCorner <= 4){ // if parallel lines are detected, but not goalTCorner nor centreTCorner
 		feature = "parallelGoalLines";
 	}
     else if( numTCornerAtGoalLines >= 4 ){
         feature = "TCornerAtGoalLines";
+    }
+    else if( numSingleLine > 6 && numCencirCircle <= 4 && numCentreTCorner <= 4 && numParallelGoalLines <= 4 && numTCornerAtGoalLines <= 4 ){
+        feature = "singleLine";
     }
 	return feature;
 }
@@ -957,4 +1039,5 @@ void clearFeatureCounter(){
 	numCencirCircle = 0;
 	numCentreTCorner = 0;
 	numTCornerAtGoalLines = 0;
+    numSingleLine = 0;
 }
