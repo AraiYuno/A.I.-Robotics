@@ -55,9 +55,12 @@ void increaseNumFeatureDetected(vector<string> detectedFeatures);
 string determineFeature();
 void updateVisionMap(string feature);
 void clearFeatureCounter();
+void mapCallBackFunc(int event, int x, int y, int flags, void *userdata);
 
 #define PI 3.14159265358979323846
-#define TEST = 1;
+int testbit = 1;
+int testobx;
+int testoby;
 
 //  84 X 57??
 const int COL = 28;
@@ -76,31 +79,12 @@ int visionMapDegree[COL][ROW] = {0};
 float globalMap[COL][ROW] = {0};
 float globalMapDegree[COL][ROW] = {0};
 int dx, dy , rx,ry;
+int steps;
 
 void drawMap();
 void adjustDegree();
 void addObstacle();
-void mapCallBackFunc(int event, int x, int y, int flags, void *userdata)
-{
-	if(event == EVENT_LBUTTONDOWN)
-	{
-		dx = x;
-		dy = y;
-	}
-	else if(event == EVENT_LBUTTONUP)
-	{
-		rx = x;
-		ry = y;
-		int rangle = (atan2(ry - dy, rx-dx) * 180/ PI) - 90;
-		
-		robot.x = dx / 30;
-		robot.y = dy /30;
-		robot.theta = rangle;
-		adjustDegree();
-		cout << "robot pos and angle " << dx/30 << " " << dy/30 << " "<< robot.theta << endl;
-		drawMap();
-	}
-}
+
 
 ////////////////////////////////////////////////////////
 ///////////////// VISION ///////////////////////////////
@@ -162,6 +146,15 @@ void adjustDegree()
     robot.theta = robot.theta % 360;
 }
 
+int globalMapSum(){
+	int summ = 0;
+	for(int i=0; i<ROW; i++){
+        for(int j = 0; j<COL; j++)
+            summ += globalMap[i][j];
+    }
+    return summ;
+}
+
 void printMotionMap(){
     for(int i=0; i<ROW; i++){
         for(int j = 0; j<COL; j++)
@@ -197,8 +190,10 @@ void drawMap()
     //load field img and draw any obsticle
     Mat field = imread("./soccer_field.png",CV_LOAD_IMAGE_COLOR);
     for(int i = 0; i < obstacles.size() ; i++){
-        circle(field, Point(obstacles.at(i).y * 30+15, obstacles.at(i).x * 30+15), 15, Scalar(255,0,255), -1);
+        circle(field, Point(obstacles.at(i).x * 30+15, obstacles.at(i).y * 30+15), 15, Scalar(255,0,255), -1);
     }
+    
+    circle(field, Point(testobx * 30+15, testoby * 30+15), 15, Scalar(255,255,0), -1);
 
     //robot location(draw triangle)
     updateRobotCoord();
@@ -433,8 +428,21 @@ PointXY obstacleXYScreen(int botX, int botY, int botOri, int screenX, int screen
 
     int obstacleX;
     int obstacleY;
-    obstacleX = screenX / 80;
-    obstacleY = screenY / 106;
+    if(screenX<1 || screenY<1)
+		return PointXY(-1,-1);
+    
+    if(screenX<110)
+		obstacleX = 0;
+	else if(screenX>=110 && screenX<=210)
+		obstacleX = 1;
+	else
+		obstacleX = 2;
+		
+	if(screenY<70)
+		obstacleY = 0;
+	else
+		obstacleY = 1;
+    
 
     //printf("%d,%d\n",obstacleX,obstacleY );
 
@@ -445,20 +453,17 @@ PointXY obstacleXYScreen(int botX, int botY, int botOri, int screenX, int screen
         refAngle = -refAngle;
 
     if(obstacleX == 0)
-        obstacleX = -1;
+        obstacleX = 1;
     else if(obstacleX == 1)
         obstacleX = 0;
     else if(obstacleX == 2)
-        obstacleX = 1;
+        obstacleX = -1;
 
     if(obstacleY == 0)
-        obstacleY = 3;
-    else if(obstacleY == 1)
         obstacleY = 2;
-    else if(obstacleY == 2)
+    else if(obstacleY == 1)
         obstacleY = 1;
-
-    // printf("%d,%d\n",obstacleX,obstacleY );
+  
 
 
     int x1,y1;
@@ -479,7 +484,20 @@ PointXY obstacleXYScreen(int botX, int botY, int botOri, int screenX, int screen
     else
         fy1+0.5;
 
-    return PointXY(fx1,fy1);
+    return PointXY(fx1+botX,fy1+botY);
+}
+
+void randomParticlesInit(){
+	setParticle(0,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    numParticle++;
+    setParticle(1,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    numParticle++;
+    setParticle(2,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    numParticle++;
+    setParticle(3,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    numParticle++;
+    setParticle(4,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    numParticle++;
 }
 ///////////////////////////////////////////////////////
 ///////////////// motion END ///////////////////////////
@@ -498,8 +516,9 @@ int numCencirCircle = 0;
 int numCentreTCorner = 0;
 int numTCornerAtGoalLines = 0;
 int numSingleLine = 0;
-bool needsVisionAngle = false;
 string globalFeature = "";
+float globalVisionAngle = -9999;
+bool needsVisionAngle = false;
 Point3i marker1;
 Point3i marker2;
 Point3i marker3;
@@ -547,8 +566,8 @@ int main(void)
 
     
     srand(time(NULL));
-    setParticle(0,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
-    //setParticle(0,14,1,0,1);
+    //setParticle(0,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
+    setParticle(0,6,10,0,90.2);
     numParticle++;
     setParticle(1,(rand()%(28)),(rand()%(19)),(rand()%(360)),0.2);
     numParticle++;
@@ -749,9 +768,18 @@ int main(void)
                     drawMap();
                 }
 				cout << "ROBOT position " << robot.x << " " << robot.y << " " << robot.theta << endl;
-                
+                if(stage1){
+					int xIn = marker1.x;
+					int yIn = marker1.y+25;
+					if(yIn > 240)
+						yIn = 240;
+					PointXY tempp = obstacleXYScreen(robot.x, robot.y, robot.theta, xIn, yIn);
+					testobx = tempp.x;
+					testoby = tempp.y;
+					printf("%d,%d\n",tempp.x, tempp.y);
+				}
                 //Enter stage 1
-				if(stage1 && !TEST){
+				else if(stage1&&!testbit){
 					Head::GetInstance()->MoveByAngle(0, -60); 
 					cout << "STAGE 1: " << distSec << endl; 
 					timeval a, b; 
@@ -765,7 +793,7 @@ int main(void)
 						gettimeofday(&b, 0); 
 						difference = b.tv_sec - a.tv_sec; 
 						//adjustWalk();
-						if(rept == 8 || rept ==6 || rept ==4)
+						if(rept ==8 || rept ==6 || rept ==4)
 							adjustWalkLeft();
 						else if(rept ==7 || rept ==5 || rept ==3){
 							adjustWalkRight();
@@ -802,7 +830,7 @@ int main(void)
 				}//stage1
 				
 				//Stage 2: Taking 20 frames and detect a feature using the vision.
-				else if(stage2 && !TEST){
+				else if(stage2&&!testbit){
 					Walking::GetInstance()->Stop();
 					Walking::GetInstance()->A_MOVE_AMPLITUDE = 0;
 					cout << "STAGE 2" << endl; 
@@ -838,7 +866,7 @@ int main(void)
                     if( needsVisionAngle ){
                         float visionAngle = vision.getVisionAngle(globalFeature); // if -9999 is returned, this means that the curr frame wasn't able to detect the assigned globalFeature
                         if( visionAngle != -9999 ){
-                            updateVisionMapDegree(globalFeature, visionAngle);
+                            //updateVisionMapDegree(globalFeature, visionAngle);
                             needsVisionAngle = false;
                             stage1 = true;
                             stage2 = false;
@@ -849,7 +877,7 @@ int main(void)
 				}
 				
 				//Stage 3
-				else if(stage3 && !TEST){
+				else if(stage3&&!testbit){
 				
 					cout << "STAGE 3" << endl; 
 					
@@ -875,9 +903,133 @@ int main(void)
 				
 				}
 				
+				else if(stage3){
+					//Point3i pillerXY = vision.getYPiller();
+					int xIn = marker1.x;
+					int yIn = marker1.y+25;
+					if(yIn > 240)
+						yIn = 240;
+					PointXY tempp = obstacleXYScreen(robot.x, robot.y, robot.theta, xIn, yIn);
+					testobx = tempp.x;
+					testoby = tempp.y;
+					printf("%d,%d\n",tempp.x, tempp.y);
+				}
+				
+				//Obstacle run demo
 				else if(stage1){
-					PointXY tempp = obstacleXYScreen(robot.x, robot.y, robot.theta, marker1.x, marker1.y);
-					printf("%d,%d\n",tempp.x, tempp.y)
+					Walking::GetInstance()->Stop();
+					Walking::GetInstance()->A_MOVE_AMPLITUDE = 0;
+					cout << "STAGE 1" << endl; 
+					if( numFramesForVision < 20 && !needsVisionAngle){
+						numFramesForVision++;    // we use 10 frames to get the average.
+						vector<string> detectedFeatures = vision.detectFeature(visionMap);
+					
+						if( detectedFeatures.size() > 0 ) // if any feature has been detected
+							increaseNumFeatureDetected(detectedFeatures);
+					}
+					else if(!needsVisionAngle) {
+						numFramesForVision = 0;
+						globalFeature = determineFeature(); // "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "TCornerAtGoalLines", or "singleLine"
+						updateVisionMap(globalFeature);
+                        needsVisionAngle = (globalFeature.compare("centreCircle") == 0) ? true : false;
+                        if( !needsVisionAngle ){
+							//updateVisionMapDegree(default);
+                            stage1 = false;
+                            stage2 = true;
+                        }
+						clearFeatureCounter();
+					}
+					
+					 // when a feature is found(visionMap is found based on the feature), then we need to calculate visionMapDegree 
+                    if( needsVisionAngle ){
+                        float globalVisionAngle = vision.getVisionAngle(globalFeature); // if -9999 is returned, this means that the curr frame wasn't able to detect the assigned globalFeature
+                        if( globalVisionAngle != -9999 ){
+                            //updateVisionMapDegree(globalFeature, visionAngle);
+                            needsVisionAngle = false;
+                            stage1 = false;
+                            stage2 = true;
+                            //updateVisionMapDegree(globalFeature, angle);
+                            cout << "VisionAngle: " << globalVisionAngle << endl;
+                            
+                            // Here visionMap and visionMapDegree are both ready!
+                        }
+                    } 
+				}
+				else if(stage2){
+					
+					combineACTSEE();
+					updateParticles();
+					drawMap();
+					
+					//printMotionMap();
+					//printVisionMap();
+					//printMotionMapDegree();
+					printParticles();
+					clearFeatureCounter();
+					cout << "Feature: " << globalFeature << endl;
+					
+					//Sees nothing and no motion prob then, create random particles
+					if(globalFeature.compare("No Features")==0 && globalMapSum() ==0){
+						randomParticlesInit();
+					}
+					
+					//if see something and no motion prob then, create particle with in possible vision area
+					else if(globalFeature.compare("No Features")!=0 && globalMapSum() ==0){
+						randomParticleVision();
+					}
+					
+					// contiue with existing prob
+					else
+						updateParticles();
+				
+					drawMap();
+					
+					//printMotionMap();
+					//printVisionMap();
+					//printMotionMapDegree();
+					printParticles();
+			
+					
+					//map the obstacle if see
+					int xIn = marker1.x;
+					int yIn = marker1.y+25;
+					if(yIn > 240)
+						yIn = 240;
+					PointXY newObs = obstacleXYScreen(robot.x, robot.y, robot.theta, xIn, yIn);
+					
+					//mark obstacle if see that
+					if(newObs.x >0 && newObs.y>0){
+						//new obstacle added to vector
+					}
+					
+					//decide motion given vision
+					steps = vision.getMoveStrategy();
+					//use vision feature as well to decide
+					
+					//globalFeature either "centreCircle" or "singleLine". globalVisionAngle: -90 ~ 90.
+					
+					stage2 = false;
+                    stage3 = true;
+				
+				}
+				else if(stage3){
+					//forward
+					if(steps ==1){
+						Head::GetInstance()->MoveByAngle(0, -60); 
+						timeval a, b; 
+						int difference = 0; 
+
+						gettimeofday(&a, 0);
+						
+						while(difference <= 3){
+							gettimeofday(&b, 0); 
+							difference = b.tv_sec - a.tv_sec; 
+							adjustWalk();
+							Walking::GetInstance()->Start();
+						}
+						motion();
+					}
+				
 				}
 				
 				
@@ -982,10 +1134,10 @@ string determineFeature(){
 	else if( numCentreTCorner > 4 && numParallelGoalLines <= 4 && numTCornerAtGoalLines <= 4 ){ // if centreTCorner( redline) is detected without parallelLines and goal T lines. ( confusion likely to happen )
 		feature = "centreTCorner";
 	}
-	else if( numParallelGoalLines > 4 && numTCornerAtGoalLines <= 4 && numCentreTCorner <= 4 && numCencirCircle <= 4 ){ // if parallel lines are detected, but not goalTCorner nor centreTCorner
+	else if( numParallelGoalLines > 4 && numTCornerAtGoalLines <= 4 && numCentreTCorner <= 4){ // if parallel lines are detected, but not goalTCorner nor centreTCorner
 		feature = "parallelGoalLines";
 	}
-    else if( numTCornerAtGoalLines > 4 && numParallelGoalLines <= 4 && numCentreTCorner <= 4 && numCencirCircle <= 4 ){
+    else if( numTCornerAtGoalLines >= 4 ){
         feature = "TCornerAtGoalLines";
     }
     else if( numSingleLine > 6 && numCencirCircle <= 4 && numCentreTCorner <= 4 && numParallelGoalLines <= 4 && numTCornerAtGoalLines <= 4 ){
@@ -1015,64 +1167,37 @@ void updateVisionMap(string feature){
         }           
     } 
     else if( feature.compare("parallelGoalLines") == 0 ){
-        for( int cols = 2; cols < 6; cols++ ){
+        for( int cols = 4; cols < 6; cols++ ){
             for( int rows = 4; rows < 12; rows++ ){
                 visionMap[cols][rows] = 1;
             }
         }
-        for( int cols = 21; cols < 25; cols++ ) {
+        for( int cols = 21; cols < 23; cols++ ) {
             for( int rows = 4; rows < 12; rows++ ){
                 visionMap[cols][cols] = 1;
             }
         }
     }
     else if( feature.compare("TCornerAtGoalLines") == 0 ){
-        for( int cols = 3; cols < 6; cols++ ){
-            for( int rows = 1; rows < 4; rows++ ){
-                visionMap[cols][rows] = 1;
-            }
-            for( int rows = 13; rows < 16; rows++ ){
+        for( int cols = 4; cols < 5; cols++ ){
+            for( int rows = 1; rows < 2; rows++ ){
                 visionMap[cols][rows] = 1;
             }
         }
-        for( int cols = 21; cols < 24; cols++ ){
-            for( int rows = 1; rows < 4; rows++ ){
-                visionMap[cols][rows] = 1;
-            }
-            for( int rows = 13; rows < 16; rows++ ){
+        for( int cols = 4; cols < 5; cols++ ){
+            for( int rows = 14; rows < 15; rows++ ){
                 visionMap[cols][rows] = 1;
             }
         }
-        
-        for( int cols = 11; cols < 17; cols++ ){
-            for( int rows = 0; rows < 5; rows++ )
-                visionMap[cols][rows] = 0.5;
-            for( int rows = 14; rows < 18; rows++ )
-                visionMap[cols][rows] = 0.5;
-        }
-    }
-    else if( feature.compare("centreTCorner") == 0 ){
-        for( int cols = 3; cols < 6; cols++ ){
-            for( int rows = 1; rows < 4; rows++ ){
-                visionMap[cols][rows] = 0.5;
-            }
-            for( int rows = 13; rows < 16; rows++ ){
-                visionMap[cols][rows] = 0.5;
-            }
-        }
-        for( int cols = 21; cols < 24; cols++ ){
-            for( int rows = 1; rows < 4; rows++ ){
-                visionMap[cols][rows] = 0.5;
-            }
-            for( int rows = 13; rows < 16; rows++ ){
-                visionMap[cols][rows] = 0.5;
-            }
-        }
-        for( int cols = 11; cols < 17; cols++ ){
-            for( int rows = 0; rows < 5; rows++ )
+        for( int cols = 21; cols < 22; cols++ ){
+            for( int rows = 1; rows < 2; rows++ ){
                 visionMap[cols][rows] = 1;
-            for( int rows = 14; rows < 18; rows++ )
+            }
+        }
+        for( int cols = 21; cols < 22; cols++ ){
+            for( int rows = 14; rows < 15; rows++ ){
                 visionMap[cols][rows] = 1;
+            }
         }
     }
 }
@@ -1084,4 +1209,28 @@ void clearFeatureCounter(){
 	numCentreTCorner = 0;
 	numTCornerAtGoalLines = 0;
     numSingleLine = 0;
+}
+
+void mapCallBackFunc(int event, int x, int y, int flags, void *userdata)
+{
+	if(event == EVENT_LBUTTONDOWN)
+	{
+		dx = x;
+		dy = y;
+	}
+	else if(event == EVENT_LBUTTONUP)
+	{
+		rx = x;
+		ry = y;
+		int rangle = (atan2(ry - dy, rx-dx) * 180/ PI) - 90;
+		
+		//robot.x = dx / 30;
+		//robot.y = dy /30;
+		//robot.theta = rangle;
+		setParticle(0,dx / 30, dy /30, rangle,1);
+		numParticle = 1;
+		adjustDegree();
+		cout << "robot pos and angle " << dx/30 << " " << dy/30 << " "<< robot.theta << endl;
+		drawMap();
+	}
 }
