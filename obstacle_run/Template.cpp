@@ -47,6 +47,34 @@ CM730 cm730(&linux_cm730);
 using namespace std;
 using namespace cv;
 
+struct Tuple
+{
+    float pd;
+    int x;
+    int y;
+
+    Tuple(float n1, int n2, int n3) : pd(n1), x(n2), y(n3)
+    {
+    }
+
+    bool operator<(const struct Tuple& other) const
+    {
+        return pd < other.pd;
+    }
+};
+
+struct PointXY
+{
+    int x;
+    int y;
+
+    PointXY(int n1, int n2) : x(n1), y(n2)
+    {
+    }
+
+};
+
+
 ////////////////////////////////////////////////////////
 ///////////////// VISION ///////////////////////////////
 ////////////////////////////////////////////////////////
@@ -65,7 +93,7 @@ int testoby;
 //  84 X 57??
 const int COL = 28;
 const int ROW = 19;
-vector<Obstacles> obstacles;
+vector<PointXY> obstacles;
 MyRobot robot;
 
 int particles[5][3];
@@ -97,32 +125,6 @@ string determineFeature();
 ///////////////// Motion ///////////////////////////
 ///////////////////////////////////////////////////////
 
-struct Tuple
-{
-    float pd;
-    int x;
-    int y;
-
-    Tuple(float n1, int n2, int n3) : pd(n1), x(n2), y(n3)
-    {
-    }
-
-    bool operator<(const struct Tuple& other) const
-    {
-        return pd < other.pd;
-    }
-};
-
-struct PointXY
-{
-    int x;
-    int y;
-
-    PointXY(int n1, int n2) : x(n1), y(n2)
-    {
-    }
-
-};
 
 
 float normDist[3][3] = 
@@ -760,23 +762,19 @@ int main(void)
 				//ball_found = tracker.ball_position.X != 0 && tracker.ball_position.Y != 0;
                 
 				Walking::GetInstance()->BALANCE_ENABLE = true;
-				if(marker1.x > 0)
-                {
-                    addObstacle();
-                    int step = vision.getMoveStrategy();
-                    cout << "step " << step << endl;
-                    drawMap();
-                }
-				cout << "ROBOT position " << robot.x << " " << robot.y << " " << robot.theta << endl;
-                if(stage1){
+				
+                if(stage1 &&!testbit){
 					int xIn = marker1.x;
 					int yIn = marker1.y+25;
 					if(yIn > 240)
 						yIn = 240;
-					PointXY tempp = obstacleXYScreen(robot.x, robot.y, robot.theta, xIn, yIn);
-					testobx = tempp.x;
-					testoby = tempp.y;
+					PointXY tempp = obstacleXYScreen(robot.x, robot.y, robot.theta, vision.getYPiller().x, vision.getYPiller().y);
+					if( tempp.x >0 &&  tempp.y >0){
+						testobx = tempp.x;
+						testoby = tempp.y;
+					}
 					printf("%d,%d\n",tempp.x, tempp.y);
+					drawMap();
 				}
                 //Enter stage 1
 				else if(stage1&&!testbit){
@@ -903,17 +901,6 @@ int main(void)
 				
 				}
 				
-				else if(stage3){
-					//Point3i pillerXY = vision.getYPiller();
-					int xIn = marker1.x;
-					int yIn = marker1.y+25;
-					if(yIn > 240)
-						yIn = 240;
-					PointXY tempp = obstacleXYScreen(robot.x, robot.y, robot.theta, xIn, yIn);
-					testobx = tempp.x;
-					testoby = tempp.y;
-					printf("%d,%d\n",tempp.x, tempp.y);
-				}
 				
 				//Obstacle run demo
 				else if(stage1){
@@ -931,7 +918,7 @@ int main(void)
 						numFramesForVision = 0;
 						globalFeature = determineFeature(); // "centreCircle" or "parallelGoalLines" or "centreLineTCorner" or "TCornerAtGoalLines", or "singleLine"
 						updateVisionMap(globalFeature);
-                        needsVisionAngle = (globalFeature.compare("centreCircle") == 0) ? true : false;
+                        needsVisionAngle = (globalFeature.compare("centreCircle") == 0 || globalFeature.compare("singleLine") == 0) ? true : false;
                         if( !needsVisionAngle ){
 							//updateVisionMapDegree(default);
                             stage1 = false;
@@ -942,7 +929,7 @@ int main(void)
 					
 					 // when a feature is found(visionMap is found based on the feature), then we need to calculate visionMapDegree 
                     if( needsVisionAngle ){
-                        float globalVisionAngle = vision.getVisionAngle(globalFeature); // if -9999 is returned, this means that the curr frame wasn't able to detect the assigned globalFeature
+                        globalVisionAngle = vision.getVisionAngle(globalFeature); // if -9999 is returned, this means that the curr frame wasn't able to detect the assigned globalFeature
                         if( globalVisionAngle != -9999 ){
                             //updateVisionMapDegree(globalFeature, visionAngle);
                             needsVisionAngle = false;
@@ -966,8 +953,8 @@ int main(void)
 					//printMotionMapDegree();
 					printParticles();
 					clearFeatureCounter();
-					cout << "Feature: " << globalFeature << endl;
-					
+					cout << "Feature1: " << globalFeature << endl;
+					//globalVisionAngle = vision.getVisionAngle(globalFeature);
 					//Sees nothing and no motion prob then, create random particles
 					if(globalFeature.compare("No Features")==0 && globalMapSum() ==0){
 						randomParticlesInit();
@@ -975,12 +962,15 @@ int main(void)
 					
 					//if see something and no motion prob then, create particle with in possible vision area
 					else if(globalFeature.compare("No Features")!=0 && globalMapSum() ==0){
-						randomParticleVision();
+						cout << "Vision"<< endl;
+						//randomParticleVision();
 					}
 					
 					// contiue with existing prob
-					else
+					else{
+						cout << "updateParticle"<< endl;
 						updateParticles();
+					}
 				
 					drawMap();
 					
@@ -991,19 +981,55 @@ int main(void)
 			
 					
 					//map the obstacle if see
-					int xIn = marker1.x;
-					int yIn = marker1.y+25;
-					if(yIn > 240)
-						yIn = 240;
-					PointXY newObs = obstacleXYScreen(robot.x, robot.y, robot.theta, xIn, yIn);
-					
-					//mark obstacle if see that
-					if(newObs.x >0 && newObs.y>0){
-						//new obstacle added to vector
-					}
+                    if(marker1.x > 0)
+                    {
+                        int xIn = marker1.x;
+                        int yIn = marker1.y+25;
+                        if(yIn > 240)
+                            yIn = 240;
+                        PointXY newObs = obstacleXYScreen(robot.x, robot.y, robot.theta, xIn, yIn);
+                        cout << "obs " << xIn << " " <<yIn << endl;
+                        bool exists = false;
+                        //mark obstacle if see that
+                        if(newObs.x >0 && newObs.y > 0){
+                            if(obstacles.size() > 0)
+                                obstacles.push_back(newObs);
+                            else
+                            {
+                                for(int i = 0; i < obstacles.size() && !exists ; i++)
+                                {
+                                    if(obstacles.at(i).x == newObs.x&& obstacles.at(i).y == newObs.y)
+                                    {
+                                        exists = true;
+                                    }
+                                }
+                                if(!exists)
+                                {
+                                    obstacles.push_back(newObs);
+                                }
+                            }
+                        }
+                    }
 					
 					//decide motion given vision
 					steps = vision.getMoveStrategy();
+					
+					if(globalFeature.compare("singleLine") == 0)
+					{
+						cout << "Single line angle : " << globalVisionAngle << endl;
+						if(globalVisionAngle >-10 & globalVisionAngle < 10 && steps == 1)
+						{
+							steps = 4;
+						}
+						else if(globalVisionAngle < -10 && (steps == 1))
+						{
+							steps = 3;
+						}
+						else if(globalVisionAngle > 10 && (steps == 1))
+						{
+							steps = 4;
+						}
+					}
 					//use vision feature as well to decide
 					
 					//globalFeature either "centreCircle" or "singleLine". globalVisionAngle: -90 ~ 90.
@@ -1013,6 +1039,7 @@ int main(void)
 				
 				}
 				else if(stage3){
+					cout << "stage 3 STEPS " << steps << endl;
 					//forward
 					if(steps ==1){
 						Head::GetInstance()->MoveByAngle(0, -60); 
@@ -1029,6 +1056,48 @@ int main(void)
 						}
 						motion();
 					}
+                    else if(steps == 3)
+                    {
+                        Head::GetInstance()->MoveByAngle(0, -60);
+                        timeval a, b; 
+                        int difference = 0;
+
+                        gettimeofday(&a, 0);
+
+                        while(difference <= 8){
+						    gettimeofday(&b, 0); 
+						    difference = b.tv_sec - a.tv_sec; 
+							adjustWalkLeft();
+                            Walking::GetInstance()->Start();
+						}
+						cout << "before turn" << endl;
+                        turn(-45);
+                        cout << "after turn" << endl;
+						drawMap();
+						cout << "after drawmap" << endl;
+						
+                    }
+                    else if(steps == 4)
+                    {
+                        Head::GetInstance()->MoveByAngle(0, -60);
+                        timeval a, b; 
+                        int difference = 0;
+
+                        gettimeofday(&a, 0);
+
+                        while(difference <= 8){
+						    gettimeofday(&b, 0); 
+						    difference = b.tv_sec - a.tv_sec; 
+							adjustWalkRight();
+                            Walking::GetInstance()->Start();
+						}
+                        turn(+45);
+						drawMap();
+						
+                    }
+                    stage3 = false;
+                    stage1 = true;
+				
 				
 				}
 				
@@ -1048,7 +1117,7 @@ int main(void)
     This function will add obstacle to the list of obstacles
 */
 void addObstacle(){
-    Obstacles obs;
+    
     int markerX = (marker1.x) / 106.7;
     int markerY = marker1.y / 80;
     int rangle = atan2(2 - markerY, 4 - markerX) * 180 / PI;
@@ -1068,8 +1137,8 @@ void addObstacle(){
     cout << "Angle << " << theta  << " " << markerX << " "<< markerY<< endl; 
     int newX = robot.x + markerX * cos(theta);
 	int newY = robot.y + markerY * sin(theta);
-	obs.x = newX;
-	obs.y = newY;
+
+	PointXY obs(newX, newY);
 	//cout << "NEW OBSTACLE POS " << obs.x << " " << obs.y << " "<< robot.x << " " << robot.y << endl;
 					
 	if(obs.x < 29 && obs.y < 20)
