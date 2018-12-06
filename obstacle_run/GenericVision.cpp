@@ -805,22 +805,25 @@ vector<string> GenericVision::drawField(Mat &hsv_img){
 	cv::Mat output = img.clone();
 	if( output.channels() == 1 )
 		cvtColor( output, output, COLOR_GRAY2BGR );
-	vector<KeyLine> mergedLines, goalLines, tCornerLCornerLines, normalLines, centreLine, centreCircleLines, singleLine;
-	cout << "before cleanup " << endl;
+	vector<KeyLine> mergedLines, goalLines, tCornerLCornerLines, normalLines, centreLine, centreCircleLines, singleLine, noShortLines;
 	cleanUpLines( keyLines, mergedLines);
-	cout << "after cleanup" << endl;
 
 	// First, we try to detect a centre circle
 	detectCentreCircleLines( mergedLines, centreCircleLines );
 	// If there exists a centre circle, we then try to detect the centreCircle line.
 	if( centreCircleLines.size() > 5 ){
 		detectedFeatures.push_back("centreCircle");
-		detectCircleTCorner( mergedLines, centreLine, true ); 
+		detectCentreLine( mergedLines, centreLine, true ); 
 		if( centreLine.size() >= 1 )
 			detectedFeatures.push_back("centreCircleLine");
 	} // If there isn't a centre circle line, then we try to detect other features such as "centreTCorner, "goalLine", or "singleLine""
 	else {
-		detectCircleTCorner( mergedLines, centreLine, false ); // detect a centreTCorner
+		for( int i = 0; i < mergedLines.size(); i++ ){
+		if( calcLineLength(mergedLines[i]) > 60 )
+			noShortLines.push_back(mergedLines[i]);
+		}
+		mergedLines = noShortLines;
+		detectCentreLine( mergedLines, centreLine, false ); // detect a centreTCorner
 		if( centreLine.size() >= 1 )
 			detectedFeatures.push_back("centreTCorner");	
 
@@ -871,7 +874,6 @@ void GenericVision::cleanUpLines( vector<KeyLine> &lines, vector<KeyLine> &merge
 				if( !mainLineIsSelected ){
 					mainLine = line;
 					mainLineIsSelected = true;
-					cout << "X: " << mainLine.startPointX << endl;
 				} else {
 					switchStartAndEnd(line);
 					switchStartAndEnd(mainLine); // to make sure that startPointX is the smaller value than endPointX at all times.
@@ -1124,10 +1126,10 @@ bool GenericVision::isLCorner(KeyLine &kl1, KeyLine &kl2){
 }
 
 
-/* Summary: detectCircleTCorner detects the centre line T corner. The idea is that if there no L corner present 
+/* Summary: detectCentreLine detects the centre line T corner. The idea is that if there no L corner present 
 on the field other, then we consider the T corner as centire line T corner. (can be updated using robot's position in 
 the future.) */
-void GenericVision::detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, bool circleExists){
+void GenericVision::detectCentreLine(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, bool circleExists){
 	if( !circleExists ){
 		int mergedLinesSize = mergedLines.size();
 		for( int i = 0; i < mergedLinesSize-1; i++ ){

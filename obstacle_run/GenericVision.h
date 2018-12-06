@@ -107,7 +107,7 @@ private:
 	void detectCentreCircleLines(vector<KeyLine> &lines, vector<KeyLine> &centreCircleLines);
 	void detectLCorners(vector<KeyLine> lines, vector<KeyLine> &cornerLines);
 	bool isLCorner(KeyLine &kl1, KeyLine &kl2);
-	void detectCircleTCorner(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, bool circleExists);
+	void detectCentreLine(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, bool circleExists);
 	string detectGoalLine(vector<KeyLine> &mergedLines, vector<KeyLine> &cornerLines, vector<KeyLine> &normalLines);
 	bool isTCorner(KeyLine &kl1, KeyLine &kl2);
 

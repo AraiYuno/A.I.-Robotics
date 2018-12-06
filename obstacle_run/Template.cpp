@@ -965,10 +965,10 @@ string determineFeature(){
 	else if( numCentreTCorner > 4 && numParallelGoalLines <= 4 && numTCornerAtGoalLines <= 4 ){ // if centreTCorner( redline) is detected without parallelLines and goal T lines. ( confusion likely to happen )
 		feature = "centreTCorner";
 	}
-	else if( numParallelGoalLines > 4 && numTCornerAtGoalLines <= 4 && numCentreTCorner <= 4){ // if parallel lines are detected, but not goalTCorner nor centreTCorner
+	else if( numParallelGoalLines > 4 && numTCornerAtGoalLines <= 4 && numCentreTCorner <= 4 && numCencirCircle <= 4 ){ // if parallel lines are detected, but not goalTCorner nor centreTCorner
 		feature = "parallelGoalLines";
 	}
-    else if( numTCornerAtGoalLines >= 4 ){
+    else if( numTCornerAtGoalLines > 4 && numParallelGoalLines <= 4 && numCentreTCorner <= 4 && numCencirCircle <= 4 ){
         feature = "TCornerAtGoalLines";
     }
     else if( numSingleLine > 6 && numCencirCircle <= 4 && numCentreTCorner <= 4 && numParallelGoalLines <= 4 && numTCornerAtGoalLines <= 4 ){
